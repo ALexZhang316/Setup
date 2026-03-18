@@ -1,0 +1,4 @@
+interface:
+  display_name: "Enso Review Gate"
+  short_description: "Project-specific review and validation for the Enso repo."
+  default_prompt: "Use $enso-review-gate to review or validate D:\\Enso against its contract, tests, and stop conditions."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Enso Execution Kernel"
+  short_description: "Planner-executor-verifier rules for Enso runtime work."
+  default_prompt: "Use $enso-execution-kernel to change Enso execution flow, retrieval, tools, or permission gates safely."

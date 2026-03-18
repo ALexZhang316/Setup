@@ -5,7 +5,17 @@
       "Bash(grep -E '\\(json|toml|ini|yaml|yml\\)$')",
       "Bash(find /c/Users/23642/.codex -name *.json -type f)",
       "Bash(xargs grep:*)",
-      "Bash(jq .[\"\"electron-persisted-atom-state\"\"][\"\"enter-behavior\"\"])"
+      "Bash(jq .[\"\"electron-persisted-atom-state\"\"][\"\"enter-behavior\"\"])",
+      "mcp__Desktop_Commander__list_directory",
+      "mcp__Desktop_Commander__read_file",
+      "Bash(ls -la C:Users23642DesktopSetup/*.cmd)",
+      "mcp__Desktop_Commander__get_file_info",
+      "Bash(ls -la /c/Users/23642/.claude/*.json)",
+      "Bash(du -sh /c/Users/23642/.claude/*/)",
+      "Bash(find /c/Users/23642/AppData -name settings.json -path *claude*)",
+      "Bash(find /c/Users/23642/AppData -maxdepth 5 -name *.json -path *Claude* ! -path */node_modules/* ! -path *Cache* ! -path *cache* ! -path *Code*)",
+      "Bash(find /c/Users/23642/AppData -maxdepth 5 -name mcp*.json)",
+      "Bash(du -sh \"/c/Users/23642/AppData/Roaming/Claude/Claude Extensions/\"*/)"
     ]
   }
 }
