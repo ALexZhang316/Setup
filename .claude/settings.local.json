@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find C:Users23642.codex -type f -name *key* -o -name *bind*)",
+      "Bash(grep -E '\\(json|toml|ini|yaml|yml\\)$')",
+      "Bash(find /c/Users/23642/.codex -name *.json -type f)",
+      "Bash(xargs grep:*)",
+      "Bash(jq .[\"\"electron-persisted-atom-state\"\"][\"\"enter-behavior\"\"])"
+    ]
+  }
+}
