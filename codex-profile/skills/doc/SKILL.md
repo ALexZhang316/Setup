@@ -17,9 +17,11 @@ description: "Use when the task involves reading, creating, or editing `.docx` d
    - Or use `scripts/render_docx.py` (requires `pdf2image` and Poppler).
    - If these tools are missing, install them or ask the user to review rendered pages locally.
 2. Use `python-docx` for edits and structured creation (headings, styles, tables, lists).
-3. After each meaningful change, re-render and inspect the pages.
-4. If visual review is not possible, extract text with `python-docx` as a fallback and call out layout risk.
-5. Keep intermediate outputs organized and clean up after final approval.
+3. When creating a new DOCX from scratch, strip the inherited package thumbnail with `scripts/strip_docx_thumbnail.py`.
+   - `python-docx`'s built-in template may carry a blank `docProps/thumbnail.jpeg`, which shows as a white thumbnail in Windows Explorer instead of the standard document icon.
+4. After each meaningful change, re-render and inspect the pages.
+5. If visual review is not possible, extract text with `python-docx` as a fallback and call out layout risk.
+6. Keep intermediate outputs organized and clean up after final approval.
 
 ## Temp and output conventions
 - Use `tmp/docs/` for intermediate files; delete when done.
@@ -65,6 +67,11 @@ pdftoppm -png $OUTDIR/$BASENAME.pdf $OUTDIR/$BASENAME
 Bundled helper:
 ```
 python3 scripts/render_docx.py /path/to/file.docx --output_dir /tmp/docx_pages
+```
+
+Thumbnail cleanup:
+```
+python3 scripts/strip_docx_thumbnail.py /path/to/file.docx
 ```
 
 ## Quality expectations
