@@ -3,7 +3,7 @@ setlocal
 set "SELF=%~f0"
 set "TMPPS=%TEMP%\Install-Claude-Code-Profile-%RANDOM%%RANDOM%.ps1"
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$content = Get-Content -LiteralPath $env:SELF -Raw; $marker = ':__POWERSHELL_PAYLOAD__'; $index = $content.LastIndexOf($marker); if ($index -lt 0) { throw 'Marker not found.' }; $script = $content.Substring($index + $marker.Length).TrimStart([char]13, [char]10); $utf8NoBom = New-Object System.Text.UTF8Encoding($false); [System.IO.File]::WriteAllText($env:TMPPS, $script, $utf8NoBom)"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$content = Get-Content -LiteralPath $env:SELF -Raw -Encoding UTF8; $marker = ':__POWERSHELL_PAYLOAD__'; $index = $content.LastIndexOf($marker); if ($index -lt 0) { throw 'Marker not found.' }; $script = $content.Substring($index + $marker.Length).TrimStart([char]13, [char]10); $utf8NoBom = New-Object System.Text.UTF8Encoding($false); [System.IO.File]::WriteAllText($env:TMPPS, $script, $utf8NoBom)"
 if errorlevel 1 goto :prepare_fail
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%TMPPS%"
@@ -99,10 +99,15 @@ if (-not $claudeCmd) {
     foreach ($p in $plugins) {
         Write-Host ("  正在安装 {0} ..." -f $p) -NoNewline
         try {
-            & claude plugin install $p --scope user 2>&1 | Out-Null
-            Write-Host ' OK' -ForegroundColor Green
+            & $claudeCmd.Source plugin install $p --scope user 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host ' OK' -ForegroundColor Green
+            } else {
+                Write-Host (" 失败 (exit {0})" -f $LASTEXITCODE) -ForegroundColor Red
+                $pluginsFailed += $p
+            }
         } catch {
-            Write-Host ' 失败' -ForegroundColor Red
+            Write-Host (" 失败 ({0})" -f $_.Exception.Message) -ForegroundColor Red
             $pluginsFailed += $p
         }
     }
