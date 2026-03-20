@@ -48,7 +48,22 @@ if (-not (Test-Path -LiteralPath $profileDir)) {
 }
 
 # ══════════════════════════════════════════════════════════════
-#  1. Settings — 恢复 settings.json（权限 + 插件启用列表）
+#  1. CLAUDE.md — 恢复全局协作协议
+# ══════════════════════════════════════════════════════════════
+Write-Host ''
+Write-Host '── CLAUDE.md ─────────────────────────────────────'
+$claudeMdSrc = Join-Path $profileDir 'CLAUDE.md'
+$claudeMdDst = Join-Path $claudeRoot 'CLAUDE.md'
+Ensure-Directory -Path $claudeRoot
+if (Test-Path -LiteralPath $claudeMdSrc) {
+    Copy-Item -LiteralPath $claudeMdSrc -Destination $claudeMdDst -Force
+    Write-Host ("  CLAUDE.md -> {0}" -f $claudeMdDst)
+} else {
+    Write-Host '  [跳过] 未找到 CLAUDE.md' -ForegroundColor Yellow
+}
+
+# ══════════════════════════════════════════════════════════════
+#  2. Settings — 恢复 settings.json（权限 + 插件启用列表）
 # ══════════════════════════════════════════════════════════════
 Write-Host ''
 Write-Host '── Settings ──────────────────────────────────────'
@@ -59,7 +74,7 @@ Copy-Item -LiteralPath $settingsSrc -Destination $settingsDst -Force
 Write-Host ("  settings.json -> {0}" -f $settingsDst)
 
 # ══════════════════════════════════════════════════════════════
-#  2. Plugins — 通过 CLI 实际安装每个插件（下载到缓存）
+#  3. Plugins — 通过 CLI 实际安装每个插件（下载到缓存）
 # ══════════════════════════════════════════════════════════════
 Write-Host ''
 Write-Host '── Plugins ───────────────────────────────────────'
@@ -101,7 +116,7 @@ if (-not $claudeCmd) {
 }
 
 # ══════════════════════════════════════════════════════════════
-#  3. Extensions — Claude Desktop 偏好 + 扩展安装提示
+#  4. Extensions — Claude Desktop 偏好 + 扩展安装提示
 # ══════════════════════════════════════════════════════════════
 Write-Host ''
 Write-Host '── Extensions ────────────────────────────────────'
@@ -186,6 +201,7 @@ if (Test-Path -LiteralPath $desktopSrcDir) {
 Write-Host ''
 Write-Host '══════════════════════════════════════════════════'
 Write-Host ' Claude Code Profile 恢复完成！'
+Write-Host '  - CLAUDE.md:  已恢复（全局协作协议）'
 Write-Host '  - Settings:   已恢复（权限 + marketplace）'
 Write-Host '  - Plugins:    已通过 CLI 安装（或已列出手动命令）'
 Write-Host '  - Extensions: 偏好已恢复（缺失扩展已列出）'
