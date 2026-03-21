@@ -98,7 +98,7 @@ const buffer = await new Response(message.raw).arrayBuffer();
 const email = await PostalMime.parse(buffer);
 ```
 
-See [gotchas.md](./gotchas.md#readablestream-can-only-be-consumed-once) for details.
+See [gotchas.md](./gotchas.md#readablestream-single-use) for details.
 
 ### Verified Destinations
 
@@ -125,7 +125,7 @@ See [gotchas.md](./gotchas.md#readablestream-can-only-be-consumed-once) for deta
 | CPU time (free tier) | 10ms |
 | CPU time (paid tier) | 50ms |
 
-See [gotchas.md](./gotchas.md#limits-reference) for complete limits table.
+See [gotchas.md](./gotchas.md#limits) for complete limits table.
 
 ## Prerequisites
 
