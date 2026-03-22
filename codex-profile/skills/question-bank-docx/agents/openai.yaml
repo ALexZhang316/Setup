@@ -1,4 +1,0 @@
-interface:
-  display_name: "Question Bank DOCX"
-  short_description: "Filter structured question-bank docx files"
-  default_prompt: "Use $question-bank-docx to extract matching questions from this .docx question bank and generate a filtered answer-first output document."
