@@ -1,4 +1,0 @@
-interface:
-  display_name: "Enso Doc Postflight"
-  short_description: "Mandatory doc-sync workflow for Enso code changes."
-  default_prompt: "Use $enso-doc-postflight to update Enso mandatory docs after a code change and verify postflight completeness."

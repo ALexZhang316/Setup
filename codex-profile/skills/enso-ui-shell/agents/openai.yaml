@@ -1,4 +1,0 @@
-interface:
-  display_name: "Enso UI Shell"
-  short_description: "Three-panel renderer workflow for Enso desktop UI changes."
-  default_prompt: "Use $enso-ui-shell to change Enso three-panel layout, mode switcher, or right-rail state rendering."

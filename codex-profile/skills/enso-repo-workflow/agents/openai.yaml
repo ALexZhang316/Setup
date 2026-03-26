@@ -1,4 +1,0 @@
-interface:
-  display_name: "Enso Repo Workflow"
-  short_description: "Repo workflow and guardrails for Enso development."
-  default_prompt: "Use $enso-repo-workflow to implement a change in D:\\Enso with the required preflight, verify, and postflight gates."

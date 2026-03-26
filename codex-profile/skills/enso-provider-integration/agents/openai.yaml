@@ -1,4 +1,0 @@
-interface:
-  display_name: "Enso Provider Integration"
-  short_description: "Provider, config, secret, and model adapter workflow for Enso."
-  default_prompt: "Use $enso-provider-integration to change Enso provider wiring, config validation, or secret storage safely."

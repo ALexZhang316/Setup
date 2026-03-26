@@ -31,3 +31,11 @@ User has zero programming background (vibe coding). Code comments: thorough, lin
 
 1. Native apps / official CLI / COM / OS capabilities first for app behavior, system integration, file associations.
 2. Python for batch processing, transformation, generation, validation — not default fix for native app issues.
+
+## 6\. Proactive Research & Web
+
+1. **主动搜索。** 遇到不确定的技术问题、API 用法、最新版本信息、错误排查时，主动使用 firecrawl / WebSearch / WebFetch 搜索，不要等用户要求。
+2. **主动查文档。** 使用不熟悉的库或工具时，先搜索官方文档确认用法，不要凭记忆猜测。
+3. **并行调研。** 需要多方面信息时，同时启动多个 Agent 或工具调用并行获取，不要串行等待。
+4. **最大化利用工具。** 有可用工具就用，不要因为"可能不需要"而跳过。宁可多查一次，不要因为信息不足而给出不准确的建议。
+

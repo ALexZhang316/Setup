@@ -38,6 +38,81 @@ function Ensure-Directory {
     }
 }
 
+function Sync-DirectorySnapshot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourcePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DestinationPath
+    )
+
+    if (-not (Test-Path -LiteralPath $SourcePath)) {
+        throw "Missing directory snapshot: $SourcePath"
+    }
+
+    $parentPath = Split-Path -Parent $DestinationPath
+    $leafName = Split-Path -Leaf $DestinationPath
+    $stagingPath = Join-Path $parentPath ("{0}.staging.{1}" -f $leafName, [guid]::NewGuid().ToString('N'))
+    $backupPath = Join-Path $parentPath ("{0}.backup.{1}" -f $leafName, [guid]::NewGuid().ToString('N'))
+    $hasBackup = $false
+
+    Ensure-Directory -Path $parentPath
+    Copy-Item -LiteralPath $SourcePath -Destination $stagingPath -Recurse -Force
+
+    try {
+        if (Test-Path -LiteralPath $DestinationPath) {
+            Move-Item -LiteralPath $DestinationPath -Destination $backupPath
+            $hasBackup = $true
+        }
+
+        Move-Item -LiteralPath $stagingPath -Destination $DestinationPath
+    }
+    catch {
+        if (-not (Test-Path -LiteralPath $DestinationPath) -and $hasBackup -and (Test-Path -LiteralPath $backupPath)) {
+            Move-Item -LiteralPath $backupPath -Destination $DestinationPath
+            $hasBackup = $false
+        }
+
+        throw
+    }
+    finally {
+        if (Test-Path -LiteralPath $stagingPath) {
+            Remove-Item -LiteralPath $stagingPath -Recurse -Force
+        }
+
+        if ($hasBackup -and (Test-Path -LiteralPath $backupPath)) {
+            Remove-Item -LiteralPath $backupPath -Recurse -Force
+        }
+    }
+}
+
+function Remove-StaleDirectories {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootPath,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$AllowedNames
+    )
+
+    if (-not (Test-Path -LiteralPath $RootPath)) {
+        return @()
+    }
+
+    $removed = @()
+    foreach ($directory in Get-ChildItem -LiteralPath $RootPath -Directory) {
+        if ($AllowedNames -contains $directory.Name) {
+            continue
+        }
+
+        Remove-Item -LiteralPath $directory.FullName -Recurse -Force
+        $removed += $directory.Name
+    }
+
+    return $removed
+}
+
 $repoRoot = Split-Path -Parent $env:SELF
 $profileDir = Join-Path $repoRoot 'claude-code-profile'
 $claudeRoot = Join-Path $env:USERPROFILE '.claude'
@@ -152,12 +227,8 @@ if (Test-Path -LiteralPath $desktopSrcDir) {
     $extSettingsSrcDir = Join-Path $desktopSrcDir 'extension-settings'
     if (Test-Path -LiteralPath $extSettingsSrcDir) {
         $extSettingsDstDir = Join-Path $claudeDesktopRoot 'Claude Extensions Settings'
-        Ensure-Directory -Path $extSettingsDstDir
-        $files = Get-ChildItem -LiteralPath $extSettingsSrcDir -Filter '*.json'
-        foreach ($f in $files) {
-            Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $extSettingsDstDir $f.Name) -Force
-            Write-Host ("  {0} -> {1}" -f $f.Name, $extSettingsDstDir)
-        }
+        Sync-DirectorySnapshot -SourcePath $extSettingsSrcDir -DestinationPath $extSettingsDstDir
+        Write-Host ("  extension settings -> {0}" -f $extSettingsDstDir)
     }
 
     # 3c. 读取扩展注册表，提示手动安装
@@ -178,6 +249,13 @@ if (Test-Path -LiteralPath $desktopSrcDir) {
 
         # 检查哪些扩展缺少二进制文件
         $extDir = Join-Path $claudeDesktopRoot 'Claude Extensions'
+        $allowedExtensionIds = @($extNames | ForEach-Object { $_.Id })
+        $removedExtensions = Remove-StaleDirectories -RootPath $extDir -AllowedNames $allowedExtensionIds
+
+        foreach ($removedExtension in $removedExtensions) {
+            Write-Host ("  removed stale extension -> {0}" -f $removedExtension)
+        }
+
         $missing = @()
         foreach ($ext in $extNames) {
             $extPath = Join-Path $extDir $ext.Id

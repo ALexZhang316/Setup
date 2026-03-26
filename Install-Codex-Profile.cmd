@@ -4,13 +4,13 @@ set "SELF=%~f0"
 set "TMPPS=%TEMP%\Install-Codex-Profile-%RANDOM%%RANDOM%.ps1"
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$content = Get-Content -LiteralPath '%SELF%' -Raw; " ^
+  "$content = Get-Content -LiteralPath $env:SELF -Raw; " ^
   "$marker = ':__POWERSHELL_PAYLOAD__'; " ^
   "$index = $content.LastIndexOf($marker); " ^
   "if ($index -lt 0) { throw 'Marker not found.' }; " ^
   "$script = $content.Substring($index + $marker.Length).TrimStart([char]13, [char]10); " ^
   "$utf8NoBom = New-Object System.Text.UTF8Encoding($false); " ^
-  "[System.IO.File]::WriteAllText('%TMPPS%', $script, $utf8NoBom)"
+  "[System.IO.File]::WriteAllText($env:TMPPS, $script, $utf8NoBom)"
 if errorlevel 1 goto :prepare_fail
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%TMPPS%" "%SELF%"
@@ -45,6 +45,55 @@ function Ensure-Directory {
     }
 }
 
+function Sync-DirectorySnapshot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourcePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DestinationPath
+    )
+
+    if (-not (Test-Path -LiteralPath $SourcePath)) {
+        throw "Missing directory snapshot: $SourcePath"
+    }
+
+    $parentPath = Split-Path -Parent $DestinationPath
+    $leafName = Split-Path -Leaf $DestinationPath
+    $stagingPath = Join-Path $parentPath ("{0}.staging.{1}" -f $leafName, [guid]::NewGuid().ToString('N'))
+    $backupPath = Join-Path $parentPath ("{0}.backup.{1}" -f $leafName, [guid]::NewGuid().ToString('N'))
+    $hasBackup = $false
+
+    Ensure-Directory -Path $parentPath
+    Copy-Item -LiteralPath $SourcePath -Destination $stagingPath -Recurse -Force
+
+    try {
+        if (Test-Path -LiteralPath $DestinationPath) {
+            Move-Item -LiteralPath $DestinationPath -Destination $backupPath
+            $hasBackup = $true
+        }
+
+        Move-Item -LiteralPath $stagingPath -Destination $DestinationPath
+    }
+    catch {
+        if (-not (Test-Path -LiteralPath $DestinationPath) -and $hasBackup -and (Test-Path -LiteralPath $backupPath)) {
+            Move-Item -LiteralPath $backupPath -Destination $DestinationPath
+            $hasBackup = $false
+        }
+
+        throw
+    }
+    finally {
+        if (Test-Path -LiteralPath $stagingPath) {
+            Remove-Item -LiteralPath $stagingPath -Recurse -Force
+        }
+
+        if ($hasBackup -and (Test-Path -LiteralPath $backupPath)) {
+            Remove-Item -LiteralPath $backupPath -Recurse -Force
+        }
+    }
+}
+
 $selfPath = $args[0]
 if (-not $selfPath) {
     throw 'Installer path argument missing.'
@@ -76,12 +125,7 @@ Ensure-Directory -Path $codexRoot
 
 Copy-Item -LiteralPath $configSourcePath -Destination $configTargetPath -Force
 Copy-Item -LiteralPath $agentsSourcePath -Destination $agentsTargetPath -Force
-
-if (Test-Path -LiteralPath $skillsTargetPath) {
-    Remove-Item -LiteralPath $skillsTargetPath -Recurse -Force
-}
-
-Copy-Item -LiteralPath $skillsSourcePath -Destination $skillsTargetPath -Recurse -Force
+Sync-DirectorySnapshot -SourcePath $skillsSourcePath -DestinationPath $skillsTargetPath
 
 Write-Host 'Codex profile restored.'
 Write-Host ("config.toml -> {0}" -f $configTargetPath)
