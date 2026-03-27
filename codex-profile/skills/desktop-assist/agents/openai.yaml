@@ -1,0 +1,4 @@
+interface:
+  display_name: "Desktop Assist"
+  short_description: "Windows desktop workflow helpers"
+  default_prompt: "Handle Windows desktop tasks using stable launchers, window helpers, screenshots, folder cleanup, AutoHotkey, and plugin-first workflows."
