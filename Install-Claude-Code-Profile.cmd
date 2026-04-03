@@ -113,10 +113,77 @@ function Remove-StaleDirectories {
     return $removed
 }
 
+function Add-UniquePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Seen,
+
+        [Parameter(Mandatory = $true)]
+        [System.Collections.Generic.List[string]]$Paths,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [switch]$RequireExists
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return
+    }
+
+    if ($RequireExists -and -not (Test-Path -LiteralPath $Path)) {
+        return
+    }
+
+    if (Test-Path -LiteralPath $Path) {
+        $normalizedPath = (Resolve-Path -LiteralPath $Path).Path
+    } else {
+        $normalizedPath = $Path
+    }
+
+    if ($Seen.ContainsKey($normalizedPath)) {
+        return
+    }
+
+    $Seen[$normalizedPath] = $true
+    $Paths.Add($normalizedPath) | Out-Null
+}
+
+function Get-ClaudeDesktopRoots {
+    param(
+        [switch]$IncludeDefaultAppData
+    )
+
+    $roots = New-Object 'System.Collections.Generic.List[string]'
+    $seen = @{}
+    $appDataRoot = Join-Path $env:APPDATA 'Claude'
+
+    if ($IncludeDefaultAppData) {
+        Add-UniquePath -Seen $seen -Paths $roots -Path $appDataRoot
+    } else {
+        Add-UniquePath -Seen $seen -Paths $roots -Path $appDataRoot -RequireExists
+    }
+
+    $packagesRoot = Join-Path $env:LOCALAPPDATA 'Packages'
+    if (Test-Path -LiteralPath $packagesRoot) {
+        foreach ($packageDir in Get-ChildItem -LiteralPath $packagesRoot -Directory -ErrorAction SilentlyContinue) {
+            if ($packageDir.Name -notlike 'Claude*') {
+                continue
+            }
+
+            $candidateRoot = Join-Path $packageDir.FullName 'LocalCache\Roaming\Claude'
+            Add-UniquePath -Seen $seen -Paths $roots -Path $candidateRoot -RequireExists
+        }
+    }
+
+    return $roots.ToArray()
+}
+
 $repoRoot = Split-Path -Parent $env:SELF
 $profileDir = Join-Path $repoRoot 'claude-code-profile'
 $claudeRoot = Join-Path $env:USERPROFILE '.claude'
-$claudeDesktopRoot = Join-Path $env:APPDATA 'Claude'
+$claudeDesktopRoots = Get-ClaudeDesktopRoots -IncludeDefaultAppData
+$claudeDesktopExistingRoots = Get-ClaudeDesktopRoots
 
 if (-not (Test-Path -LiteralPath $profileDir)) {
     throw "未找到配置快照目录：$profileDir"
@@ -204,11 +271,11 @@ Write-Host '── Extensions ────────────────�
 $desktopSrcDir = Join-Path $profileDir 'claude-desktop'
 if (Test-Path -LiteralPath $desktopSrcDir) {
     # 3a. Claude Desktop 偏好设置
-    foreach ($targetRoot in @($claudeDesktopRoot, (Join-Path $env:LOCALAPPDATA 'Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude'))) {
-        if (-not (Test-Path -LiteralPath $targetRoot)) { continue }
+    foreach ($targetRoot in $claudeDesktopRoots) {
         $cfgSrc = Join-Path $desktopSrcDir 'claude_desktop_config.json'
         if (Test-Path -LiteralPath $cfgSrc) {
             # 保留目标文件中的 oauth:tokenCache 等敏感字段
+            Ensure-Directory -Path $targetRoot
             $cfgDst = Join-Path $targetRoot 'claude_desktop_config.json'
             $srcObj = Get-Content -LiteralPath $cfgSrc -Raw | ConvertFrom-Json
             if (Test-Path -LiteralPath $cfgDst) {
@@ -226,9 +293,11 @@ if (Test-Path -LiteralPath $desktopSrcDir) {
     # 3b. Per-extension settings (enabled/disabled)
     $extSettingsSrcDir = Join-Path $desktopSrcDir 'extension-settings'
     if (Test-Path -LiteralPath $extSettingsSrcDir) {
-        $extSettingsDstDir = Join-Path $claudeDesktopRoot 'Claude Extensions Settings'
-        Sync-DirectorySnapshot -SourcePath $extSettingsSrcDir -DestinationPath $extSettingsDstDir
-        Write-Host ("  extension settings -> {0}" -f $extSettingsDstDir)
+        foreach ($targetRoot in $claudeDesktopRoots) {
+            $extSettingsDstDir = Join-Path $targetRoot 'Claude Extensions Settings'
+            Sync-DirectorySnapshot -SourcePath $extSettingsSrcDir -DestinationPath $extSettingsDstDir
+            Write-Host ("  extension settings -> {0}" -f $extSettingsDstDir)
+        }
     }
 
     # 3c. 读取扩展注册表，提示手动安装
@@ -247,33 +316,39 @@ if (Test-Path -LiteralPath $desktopSrcDir) {
             }
         }
 
-        # 检查哪些扩展缺少二进制文件
-        $extDir = Join-Path $claudeDesktopRoot 'Claude Extensions'
-        $allowedExtensionIds = @($extNames | ForEach-Object { $_.Id })
-        $removedExtensions = Remove-StaleDirectories -RootPath $extDir -AllowedNames $allowedExtensionIds
-
-        foreach ($removedExtension in $removedExtensions) {
-            Write-Host ("  removed stale extension -> {0}" -f $removedExtension)
+        if ($claudeDesktopExistingRoots.Count -eq 0) {
+            Write-Host '  [跳过] 未检测到 Claude Desktop 数据目录，无法检查扩展安装状态。' -ForegroundColor Yellow
         }
 
-        $missing = @()
-        foreach ($ext in $extNames) {
-            $extPath = Join-Path $extDir $ext.Id
-            if (-not (Test-Path -LiteralPath $extPath)) {
-                $missing += $ext
-            }
-        }
+        foreach ($desktopRoot in $claudeDesktopExistingRoots) {
+            # 检查哪些扩展缺少二进制文件
+            $extDir = Join-Path $desktopRoot 'Claude Extensions'
+            $allowedExtensionIds = @($extNames | ForEach-Object { $_.Id })
+            $removedExtensions = Remove-StaleDirectories -RootPath $extDir -AllowedNames $allowedExtensionIds
 
-        if ($missing.Count -gt 0) {
-            Write-Host ''
-            Write-Host '  以下 Desktop 扩展需要在 Claude Desktop 中手动安装：' -ForegroundColor Yellow
-            Write-Host '  (打开 Claude Desktop -> Settings -> Extensions -> 搜索安装)' -ForegroundColor Yellow
-            Write-Host ''
-            foreach ($ext in $missing) {
-                Write-Host ("    - {0} v{1} ({2})" -f $ext.DisplayName, $ext.Version, $ext.Id)
+            foreach ($removedExtension in $removedExtensions) {
+                Write-Host ("  removed stale extension -> {0} ({1})" -f $removedExtension, $desktopRoot)
             }
-        } else {
-            Write-Host '  所有 Desktop 扩展已就绪。'
+
+            $missing = @()
+            foreach ($ext in $extNames) {
+                $extPath = Join-Path $extDir $ext.Id
+                if (-not (Test-Path -LiteralPath $extPath)) {
+                    $missing += $ext
+                }
+            }
+
+            if ($missing.Count -gt 0) {
+                Write-Host ''
+                Write-Host ("  以下 Desktop 扩展需要在 Claude Desktop 中手动安装：{0}" -f $desktopRoot) -ForegroundColor Yellow
+                Write-Host '  (打开 Claude Desktop -> Settings -> Extensions -> 搜索安装)' -ForegroundColor Yellow
+                Write-Host ''
+                foreach ($ext in $missing) {
+                    Write-Host ("    - {0} v{1} ({2})" -f $ext.DisplayName, $ext.Version, $ext.Id)
+                }
+            } else {
+                Write-Host ("  所有 Desktop 扩展已就绪。({0})" -f $desktopRoot)
+            }
         }
     }
 }

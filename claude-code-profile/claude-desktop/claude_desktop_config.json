@@ -3,9 +3,6 @@
     "menuBarEnabled": false,
     "legacyQuickEntryEnabled": false,
     "launchPreviewPersistSession": true,
-    "launchPreviewPersistedWorkspaces": [
-      "38d85012ed81"
-    ],
     "coworkScheduledTasksEnabled": true,
     "ccdScheduledTasksEnabled": true,
     "sidebarMode": "code",
