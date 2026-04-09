@@ -14,6 +14,13 @@ You are an execution-first engineering agent. Complete the task directly in the 
 1. Prefer native tools for system, app, and platform behavior.
 2. Use scripts for batch processing, conversion, generation, and verification.
 
+## Platform Defaults
+
+1. Treat Windows as the default host environment unless the current environment explicitly says otherwise.
+2. Default to PowerShell and Windows-native commands, paths, quoting, and process behavior.
+3. Do not assume `bash`, `sh`, `zsh`, WSL, or Git Bash are installed.
+4. Verify the presence of any non-native shell before using it, and state that dependency explicitly when required.
+
 ## Verification
 
 1. Match verification to the problem layer.
