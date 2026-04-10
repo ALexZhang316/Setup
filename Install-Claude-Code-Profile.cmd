@@ -38,6 +38,18 @@ function Ensure-Directory {
     }
 }
 
+function Fail-Install {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    Write-Host ''
+    Write-Host 'Claude 配置安装失败。' -ForegroundColor Red
+    Write-Host ("  {0}" -f $Message) -ForegroundColor Red
+    exit 1
+}
+
 function Sync-DirectorySnapshot {
     param(
         [Parameter(Mandatory = $true)]
@@ -179,69 +191,123 @@ function Get-ClaudeDesktopRoots {
     return $roots.ToArray()
 }
 
-$repoRoot = Split-Path -Parent $env:SELF
-$profileDir = Join-Path $repoRoot 'claude-code-profile'
-$claudeRoot = Join-Path $env:USERPROFILE '.claude'
-$claudeDesktopRoots = Get-ClaudeDesktopRoots -IncludeDefaultAppData
-$claudeDesktopExistingRoots = Get-ClaudeDesktopRoots
+function Get-ClaudeCliPath {
+    $command = Get-Command 'claude', 'claude.exe' -ErrorAction SilentlyContinue |
+        Select-Object -First 1
 
-if (-not (Test-Path -LiteralPath $profileDir)) {
-    throw "未找到配置快照目录：$profileDir"
+    if ($command -and $command.Source) {
+        return $command.Source
+    }
+
+    $candidates = New-Object 'System.Collections.Generic.List[string]'
+    $seen = @{}
+
+    $appDataCliRoot = Join-Path $env:APPDATA 'Claude\claude-code'
+    if (Test-Path -LiteralPath $appDataCliRoot) {
+        foreach ($versionDir in Get-ChildItem -LiteralPath $appDataCliRoot -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending) {
+            Add-UniquePath -Seen $seen -Paths $candidates -Path (Join-Path $versionDir.FullName 'claude.exe') -RequireExists
+        }
+    }
+
+    $packagesRoot = Join-Path $env:LOCALAPPDATA 'Packages'
+    if (Test-Path -LiteralPath $packagesRoot) {
+        foreach ($packageDir in Get-ChildItem -LiteralPath $packagesRoot -Directory -ErrorAction SilentlyContinue) {
+            if ($packageDir.Name -notlike 'Claude*') {
+                continue
+            }
+
+            $cliRoot = Join-Path $packageDir.FullName 'LocalCache\Roaming\Claude\claude-code'
+            if (-not (Test-Path -LiteralPath $cliRoot)) {
+                continue
+            }
+
+            foreach ($versionDir in Get-ChildItem -LiteralPath $cliRoot -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending) {
+                Add-UniquePath -Seen $seen -Paths $candidates -Path (Join-Path $versionDir.FullName 'claude.exe') -RequireExists
+            }
+        }
+    }
+
+    return $candidates | Select-Object -First 1
 }
 
-# ══════════════════════════════════════════════════════════════
-#  1. CLAUDE.md — 恢复全局协作协议
-# ══════════════════════════════════════════════════════════════
-Write-Host ''
-Write-Host '── CLAUDE.md ─────────────────────────────────────'
-$claudeMdSrc = Join-Path $profileDir 'CLAUDE.md'
-$claudeMdDst = Join-Path $claudeRoot 'CLAUDE.md'
-Ensure-Directory -Path $claudeRoot
-if (Test-Path -LiteralPath $claudeMdSrc) {
+try {
+    $repoRoot = Split-Path -Parent $env:SELF
+    $profileDir = Join-Path $repoRoot 'claude-code-profile'
+    $claudeRoot = Join-Path $env:USERPROFILE '.claude'
+
+    if (-not (Test-Path -LiteralPath $profileDir)) {
+        throw "未找到仓库内的 Claude 配置快照目录：$profileDir"
+    }
+
+    $claudeMdSrc = Join-Path $profileDir 'CLAUDE.md'
+    $settingsSrc = Join-Path $profileDir 'settings.json'
+    $desktopSrcDir = Join-Path $profileDir 'claude-desktop'
+
+    if (-not (Test-Path -LiteralPath $claudeMdSrc)) {
+        throw "未找到仓库内的 CLAUDE.md：$claudeMdSrc"
+    }
+
+    if (-not (Test-Path -LiteralPath $settingsSrc)) {
+        throw "未找到仓库内的 settings.json：$settingsSrc"
+    }
+
+    Write-Host '开始检查前置条件...'
+
+    $settings = Get-Content -LiteralPath $settingsSrc -Raw | ConvertFrom-Json
+    $plugins = @()
+    if ($settings.enabledPlugins) {
+        $plugins = $settings.enabledPlugins.PSObject.Properties.Name
+    }
+
+    $claudeCmd = Get-ClaudeCliPath
+    if (-not $claudeCmd) {
+        throw '未检测到 Claude Code CLI。请先安装 Claude Code，并至少启动一次后完全退出，再运行本脚本。'
+    }
+    Write-Host ("  Claude Code CLI -> {0}" -f $claudeCmd)
+
+    if ($plugins.Count -gt 0) {
+        $gitCmd = Get-Command 'git.exe', 'git' -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $gitCmd) {
+            throw '未检测到 Git。Claude Code 插件安装依赖 Git，请先安装 Git，并重新打开终端后再运行本脚本。'
+        }
+        Write-Host ("  Git -> {0}" -f $gitCmd.Source)
+    }
+
+    $claudeDesktopRoots = @()
+    if (Test-Path -LiteralPath $desktopSrcDir) {
+        $claudeDesktopRoots = @(Get-ClaudeDesktopRoots)
+        if ($claudeDesktopRoots.Count -eq 0) {
+            throw '未检测到 Claude Desktop 数据目录。请先安装并启动一次 Claude Desktop，然后完全退出后再运行本脚本。'
+        }
+
+        foreach ($desktopRoot in $claudeDesktopRoots) {
+            Write-Host ("  Claude Desktop -> {0}" -f $desktopRoot)
+        }
+    }
+
+    Write-Host ''
+    Write-Host '── CLAUDE.md ─────────────────────────────────────'
+    $claudeMdDst = Join-Path $claudeRoot 'CLAUDE.md'
+    Ensure-Directory -Path $claudeRoot
     Copy-Item -LiteralPath $claudeMdSrc -Destination $claudeMdDst -Force
     Write-Host ("  CLAUDE.md -> {0}" -f $claudeMdDst)
-} else {
-    Write-Host '  [跳过] 未找到 CLAUDE.md' -ForegroundColor Yellow
-}
 
-# ══════════════════════════════════════════════════════════════
-#  2. Settings — 恢复 settings.json（权限 + 插件启用列表）
-# ══════════════════════════════════════════════════════════════
-Write-Host ''
-Write-Host '── Settings ──────────────────────────────────────'
-$settingsSrc = Join-Path $profileDir 'settings.json'
-$settingsDst = Join-Path $claudeRoot 'settings.json'
-Ensure-Directory -Path $claudeRoot
-Copy-Item -LiteralPath $settingsSrc -Destination $settingsDst -Force
-Write-Host ("  settings.json -> {0}" -f $settingsDst)
+    Write-Host ''
+    Write-Host '── Settings ──────────────────────────────────────'
+    $settingsDst = Join-Path $claudeRoot 'settings.json'
+    Ensure-Directory -Path $claudeRoot
+    Copy-Item -LiteralPath $settingsSrc -Destination $settingsDst -Force
+    Write-Host ("  settings.json -> {0}" -f $settingsDst)
 
-# ══════════════════════════════════════════════════════════════
-#  3. Plugins — 通过 CLI 实际安装每个插件（下载到缓存）
-# ══════════════════════════════════════════════════════════════
-Write-Host ''
-Write-Host '── Plugins ───────────────────────────────────────'
+    Write-Host ''
+    Write-Host '── Plugins ───────────────────────────────────────'
+    Write-Host ("  claude cli -> {0}" -f $claudeCmd)
 
-# 从 settings.json 读取启用的插件列表
-$settings = Get-Content -LiteralPath $settingsSrc -Raw | ConvertFrom-Json
-$plugins = @()
-if ($settings.enabledPlugins) {
-    $plugins = $settings.enabledPlugins.PSObject.Properties.Name
-}
-
-# 检查 claude CLI 是否可用
-$claudeCmd = Get-Command 'claude' -ErrorAction SilentlyContinue
-if (-not $claudeCmd) {
-    Write-Host '  [跳过] 未找到 claude CLI，无法自动安装插件。' -ForegroundColor Yellow
-    Write-Host '  请安装 Claude Code 后手动执行：' -ForegroundColor Yellow
-    foreach ($p in $plugins) {
-        Write-Host ("    claude plugin install {0}" -f $p)
-    }
-} else {
     $pluginsFailed = @()
     foreach ($p in $plugins) {
         Write-Host ("  正在安装 {0} ..." -f $p) -NoNewline
         try {
-            & $claudeCmd.Source plugin install $p --scope user 2>&1 | Out-Null
+            & $claudeCmd plugin install $p --scope user 2>&1 | Out-Null
             if ($LASTEXITCODE -eq 0) {
                 Write-Host ' OK' -ForegroundColor Green
             } else {
@@ -260,107 +326,93 @@ if (-not $claudeCmd) {
             Write-Host ("    claude plugin install {0}" -f $p)
         }
     }
-}
 
-# ══════════════════════════════════════════════════════════════
-#  4. Extensions — Claude Desktop 偏好 + 扩展安装提示
-# ══════════════════════════════════════════════════════════════
-Write-Host ''
-Write-Host '── Extensions ────────────────────────────────────'
+    Write-Host ''
+    Write-Host '── Extensions ────────────────────────────────────'
 
-$desktopSrcDir = Join-Path $profileDir 'claude-desktop'
-if (Test-Path -LiteralPath $desktopSrcDir) {
-    # 3a. Claude Desktop 偏好设置
-    foreach ($targetRoot in $claudeDesktopRoots) {
-        $cfgSrc = Join-Path $desktopSrcDir 'claude_desktop_config.json'
-        if (Test-Path -LiteralPath $cfgSrc) {
-            # 保留目标文件中的 oauth:tokenCache 等敏感字段
-            Ensure-Directory -Path $targetRoot
-            $cfgDst = Join-Path $targetRoot 'claude_desktop_config.json'
-            $srcObj = Get-Content -LiteralPath $cfgSrc -Raw | ConvertFrom-Json
-            if (Test-Path -LiteralPath $cfgDst) {
-                $dstObj = Get-Content -LiteralPath $cfgDst -Raw | ConvertFrom-Json
-                # 只覆盖 preferences 部分，保留其他已有字段
-                $dstObj.preferences = $srcObj.preferences
-                $dstObj | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $cfgDst -Encoding UTF8
-            } else {
-                Copy-Item -LiteralPath $cfgSrc -Destination $cfgDst -Force
-            }
-            Write-Host ("  claude_desktop_config.json -> {0}" -f $cfgDst)
-        }
-    }
-
-    # 3b. Per-extension settings (enabled/disabled)
-    $extSettingsSrcDir = Join-Path $desktopSrcDir 'extension-settings'
-    if (Test-Path -LiteralPath $extSettingsSrcDir) {
+    if (Test-Path -LiteralPath $desktopSrcDir) {
         foreach ($targetRoot in $claudeDesktopRoots) {
-            $extSettingsDstDir = Join-Path $targetRoot 'Claude Extensions Settings'
-            Sync-DirectorySnapshot -SourcePath $extSettingsSrcDir -DestinationPath $extSettingsDstDir
-            Write-Host ("  extension settings -> {0}" -f $extSettingsDstDir)
+            $cfgSrc = Join-Path $desktopSrcDir 'claude_desktop_config.json'
+            if (Test-Path -LiteralPath $cfgSrc) {
+                $cfgDst = Join-Path $targetRoot 'claude_desktop_config.json'
+                $srcObj = Get-Content -LiteralPath $cfgSrc -Raw | ConvertFrom-Json
+                if (Test-Path -LiteralPath $cfgDst) {
+                    $dstObj = Get-Content -LiteralPath $cfgDst -Raw | ConvertFrom-Json
+                    $dstObj.preferences = $srcObj.preferences
+                    $dstObj | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $cfgDst -Encoding UTF8
+                } else {
+                    Copy-Item -LiteralPath $cfgSrc -Destination $cfgDst -Force
+                }
+                Write-Host ("  claude_desktop_config.json -> {0}" -f $cfgDst)
+            }
+        }
+
+        $extSettingsSrcDir = Join-Path $desktopSrcDir 'extension-settings'
+        if (Test-Path -LiteralPath $extSettingsSrcDir) {
+            foreach ($targetRoot in $claudeDesktopRoots) {
+                $extSettingsDstDir = Join-Path $targetRoot 'Claude Extensions Settings'
+                Sync-DirectorySnapshot -SourcePath $extSettingsSrcDir -DestinationPath $extSettingsDstDir
+                Write-Host ("  extension settings -> {0}" -f $extSettingsDstDir)
+            }
+        }
+
+        $extSrc = Join-Path $desktopSrcDir 'extensions-installations.json'
+        if (Test-Path -LiteralPath $extSrc) {
+            $extData = Get-Content -LiteralPath $extSrc -Raw | ConvertFrom-Json
+            $extNames = @()
+            if ($extData.extensions) {
+                $extData.extensions.PSObject.Properties | ForEach-Object {
+                    $ext = $_.Value
+                    $extNames += [PSCustomObject]@{
+                        Id = $ext.id
+                        DisplayName = $ext.manifest.display_name
+                        Version = $ext.version
+                    }
+                }
+            }
+
+            foreach ($desktopRoot in $claudeDesktopRoots) {
+                $extDir = Join-Path $desktopRoot 'Claude Extensions'
+                $allowedExtensionIds = @($extNames | ForEach-Object { $_.Id })
+                $removedExtensions = Remove-StaleDirectories -RootPath $extDir -AllowedNames $allowedExtensionIds
+
+                foreach ($removedExtension in $removedExtensions) {
+                    Write-Host ("  removed stale extension -> {0} ({1})" -f $removedExtension, $desktopRoot)
+                }
+
+                $missing = @()
+                foreach ($ext in $extNames) {
+                    $extPath = Join-Path $extDir $ext.Id
+                    if (-not (Test-Path -LiteralPath $extPath)) {
+                        $missing += $ext
+                    }
+                }
+
+                if ($missing.Count -gt 0) {
+                    Write-Host ''
+                    Write-Host ("  以下 Desktop 扩展需要在 Claude Desktop 中手动安装：{0}" -f $desktopRoot) -ForegroundColor Yellow
+                    Write-Host '  (打开 Claude Desktop -> Settings -> Extensions -> 搜索安装)' -ForegroundColor Yellow
+                    Write-Host ''
+                    foreach ($ext in $missing) {
+                        Write-Host ("    - {0} v{1} ({2})" -f $ext.DisplayName, $ext.Version, $ext.Id)
+                    }
+                } else {
+                    Write-Host ("  所有 Desktop 扩展已就绪。({0})" -f $desktopRoot)
+                }
+            }
         }
     }
 
-    # 3c. 读取扩展注册表，提示手动安装
-    $extSrc = Join-Path $desktopSrcDir 'extensions-installations.json'
-    if (Test-Path -LiteralPath $extSrc) {
-        $extData = Get-Content -LiteralPath $extSrc -Raw | ConvertFrom-Json
-        $extNames = @()
-        if ($extData.extensions) {
-            $extData.extensions.PSObject.Properties | ForEach-Object {
-                $ext = $_.Value
-                $extNames += [PSCustomObject]@{
-                    Id = $ext.id
-                    DisplayName = $ext.manifest.display_name
-                    Version = $ext.version
-                }
-            }
-        }
-
-        if ($claudeDesktopExistingRoots.Count -eq 0) {
-            Write-Host '  [跳过] 未检测到 Claude Desktop 数据目录，无法检查扩展安装状态。' -ForegroundColor Yellow
-        }
-
-        foreach ($desktopRoot in $claudeDesktopExistingRoots) {
-            # 检查哪些扩展缺少二进制文件
-            $extDir = Join-Path $desktopRoot 'Claude Extensions'
-            $allowedExtensionIds = @($extNames | ForEach-Object { $_.Id })
-            $removedExtensions = Remove-StaleDirectories -RootPath $extDir -AllowedNames $allowedExtensionIds
-
-            foreach ($removedExtension in $removedExtensions) {
-                Write-Host ("  removed stale extension -> {0} ({1})" -f $removedExtension, $desktopRoot)
-            }
-
-            $missing = @()
-            foreach ($ext in $extNames) {
-                $extPath = Join-Path $extDir $ext.Id
-                if (-not (Test-Path -LiteralPath $extPath)) {
-                    $missing += $ext
-                }
-            }
-
-            if ($missing.Count -gt 0) {
-                Write-Host ''
-                Write-Host ("  以下 Desktop 扩展需要在 Claude Desktop 中手动安装：{0}" -f $desktopRoot) -ForegroundColor Yellow
-                Write-Host '  (打开 Claude Desktop -> Settings -> Extensions -> 搜索安装)' -ForegroundColor Yellow
-                Write-Host ''
-                foreach ($ext in $missing) {
-                    Write-Host ("    - {0} v{1} ({2})" -f $ext.DisplayName, $ext.Version, $ext.Id)
-                }
-            } else {
-                Write-Host ("  所有 Desktop 扩展已就绪。({0})" -f $desktopRoot)
-            }
-        }
-    }
+    Write-Host ''
+    Write-Host '══════════════════════════════════════════════════'
+    Write-Host ' Claude Code Profile 恢复完成！'
+    Write-Host '  - CLAUDE.md:  已恢复（全局协作协议）'
+    Write-Host '  - Settings:   已恢复（权限 + marketplace）'
+    Write-Host '  - Plugins:    已通过 CLI 安装（或已列出手动命令）'
+    Write-Host '  - Extensions: 偏好已恢复（缺失扩展已列出）'
+    Write-Host '  - Restart:    若 Claude / Claude Desktop 正在运行，请完全退出后重新打开'
+    Write-Host '══════════════════════════════════════════════════'
 }
-
-# ══════════════════════════════════════════════════════════════
-#  完成
-# ══════════════════════════════════════════════════════════════
-Write-Host ''
-Write-Host '══════════════════════════════════════════════════'
-Write-Host ' Claude Code Profile 恢复完成！'
-Write-Host '  - CLAUDE.md:  已恢复（全局协作协议）'
-Write-Host '  - Settings:   已恢复（权限 + marketplace）'
-Write-Host '  - Plugins:    已通过 CLI 安装（或已列出手动命令）'
-Write-Host '  - Extensions: 偏好已恢复（缺失扩展已列出）'
-Write-Host '══════════════════════════════════════════════════'
+catch {
+    Fail-Install -Message $_.Exception.Message
+}

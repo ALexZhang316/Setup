@@ -22,14 +22,14 @@ del /q "%TMPPS%" >nul 2>nul
 
 if not "%EXIT_CODE%"=="0" (
     echo.
-    echo Install failed with exit code %EXIT_CODE%.
+    echo 安装失败，退出码 %EXIT_CODE%。
     pause
 )
 
 exit /b %EXIT_CODE%
 
 :prepare_fail
-echo Failed to prepare the installer.
+echo 安装脚本准备失败。
 pause
 exit /b 1
 
@@ -45,6 +45,63 @@ function Ensure-Directory {
     if (-not (Test-Path -LiteralPath $Path)) {
         New-Item -ItemType Directory -Path $Path -Force | Out-Null
     }
+}
+
+function Add-UniquePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Seen,
+
+        [Parameter(Mandatory = $true)]
+        [System.Collections.Generic.List[string]]$Paths,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [switch]$RequireExists
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return
+    }
+
+    if ($RequireExists -and -not (Test-Path -LiteralPath $Path)) {
+        return
+    }
+
+    if (Test-Path -LiteralPath $Path) {
+        $normalizedPath = (Resolve-Path -LiteralPath $Path).Path
+    } else {
+        $normalizedPath = $Path
+    }
+
+    if ($Seen.ContainsKey($normalizedPath)) {
+        return
+    }
+
+    $Seen[$normalizedPath] = $true
+    $Paths.Add($normalizedPath) | Out-Null
+}
+
+function Fail-Install {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    Write-Host ''
+    Write-Host '聊天热键安装失败。' -ForegroundColor Red
+    Write-Host ("  {0}" -f $Message) -ForegroundColor Red
+    exit 1
+}
+
+function Get-DesktopDirectory {
+    $desktopPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::DesktopDirectory)
+    if ([string]::IsNullOrWhiteSpace($desktopPath)) {
+        return (Join-Path $env:USERPROFILE 'Desktop')
+    }
+
+    return $desktopPath
 }
 
 function Get-AutoHotkeyExe {
@@ -79,21 +136,89 @@ function Ensure-AutoHotkey {
 
     $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
     if (-not $winget) {
-        throw 'winget.exe was not found, so AutoHotkey cannot be installed automatically.'
+        throw '未检测到 AutoHotkey v2，且系统中也没有 winget。请先手动安装 AutoHotkey v2，再重新运行本脚本。'
     }
 
-    Write-Host 'Installing AutoHotkey...'
-    & $winget.Source install --id AutoHotkey.AutoHotkey -e --accept-package-agreements --accept-source-agreements
-    if ($LASTEXITCODE -ne 0) {
-        throw "AutoHotkey installation failed with exit code $LASTEXITCODE."
+    Write-Host '未检测到 AutoHotkey v2，开始尝试通过 winget 自动安装...'
+    $arguments = @(
+        'install',
+        '--id', 'AutoHotkey.AutoHotkey',
+        '-e',
+        '--accept-package-agreements',
+        '--accept-source-agreements',
+        '--disable-interactivity',
+        '--silent'
+    )
+    $process = Start-Process -FilePath $winget.Source -ArgumentList $arguments -NoNewWindow -PassThru
+    if (-not $process.WaitForExit(300000)) {
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        throw '通过 winget 自动安装 AutoHotkey v2 超时（5 分钟）。请先手动安装 AutoHotkey v2，再重新运行本脚本。'
+    }
+
+    if ($process.ExitCode -ne 0) {
+        throw ("通过 winget 安装 AutoHotkey v2 失败，退出码 {0}。请先手动安装 AutoHotkey v2，再重新运行本脚本。" -f $process.ExitCode)
     }
 
     $exePath = Get-AutoHotkeyExe
     if (-not $exePath) {
-        throw 'AutoHotkey was installed, but the executable was not found afterward.'
+        throw 'AutoHotkey v2 安装完成后仍未检测到可执行文件。请先手动确认安装成功，再重新运行本脚本。'
     }
 
     return $exePath
+}
+
+function Resolve-SupportedApps {
+    $apps = @(
+        [pscustomobject]@{
+            DisplayName = 'Codex'
+            PackageName = 'OpenAI.Codex'
+            RelativePaths = @('app\Codex.exe')
+            ExtraPaths = @(
+                (Join-Path $env:LOCALAPPDATA 'Programs\Codex\Codex.exe'),
+                $(if ($env:ProgramFiles) { Join-Path $env:ProgramFiles 'Codex\Codex.exe' }),
+                $(if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} 'Codex\Codex.exe' })
+            )
+        },
+        [pscustomobject]@{
+            DisplayName = 'Claude'
+            PackageName = 'Claude'
+            RelativePaths = @('app\Claude.exe', 'app\claude.exe')
+            ExtraPaths = @(
+                (Join-Path $env:LOCALAPPDATA 'Programs\Claude\Claude.exe'),
+                (Join-Path $env:LOCALAPPDATA 'Programs\Claude\claude.exe'),
+                $(if ($env:ProgramFiles) { Join-Path $env:ProgramFiles 'Claude\Claude.exe' }),
+                $(if ($env:ProgramFiles) { Join-Path $env:ProgramFiles 'Claude\claude.exe' }),
+                $(if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} 'Claude\Claude.exe' }),
+                $(if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} 'Claude\claude.exe' })
+            )
+        }
+    )
+
+    $resolved = @()
+    foreach ($app in $apps) {
+        $candidates = New-Object 'System.Collections.Generic.List[string]'
+        $seen = @{}
+
+        foreach ($pkg in @(Get-AppxPackage $app.PackageName -ErrorAction SilentlyContinue | Sort-Object Version -Descending)) {
+            foreach ($relativePath in $app.RelativePaths) {
+                Add-UniquePath -Seen $seen -Paths $candidates -Path (Join-Path $pkg.InstallLocation $relativePath) -RequireExists
+            }
+        }
+
+        foreach ($extraPath in $app.ExtraPaths) {
+            Add-UniquePath -Seen $seen -Paths $candidates -Path $extraPath -RequireExists
+        }
+
+        $exePath = $candidates | Select-Object -First 1
+        if ($exePath) {
+            $resolved += [pscustomobject]@{
+                DisplayName = $app.DisplayName
+                Path = $exePath
+            }
+        }
+    }
+
+    return $resolved
 }
 
 function Write-RemapScript {
@@ -213,28 +338,47 @@ function Start-RemapProcess {
     Start-Process -FilePath $ExecutablePath -ArgumentList ('"{0}"' -f $ScriptPath) | Out-Null
 }
 
-$remapRoot = Join-Path $env:LOCALAPPDATA 'DesktopAIKeyRemap'
-$scriptPath = Join-Path $remapRoot 'ChatEnterNewline.ahk'
-$legacyScriptPath = Join-Path $env:LOCALAPPDATA 'CodexKeyRemap\CodexEnterNewline.ahk'
-$legacyClaudeScriptPath = Join-Path $env:USERPROFILE 'Desktop\ClaudeEnterSwap.ahk'
+try {
+    $remapRoot = Join-Path $env:LOCALAPPDATA 'DesktopAIKeyRemap'
+    $scriptPath = Join-Path $remapRoot 'ChatEnterNewline.ahk'
+    $legacyScriptPath = Join-Path $env:LOCALAPPDATA 'CodexKeyRemap\CodexEnterNewline.ahk'
+    $legacyClaudeScriptPath = Join-Path (Get-DesktopDirectory) 'ClaudeEnterSwap.ahk'
 
-Ensure-Directory -Path $remapRoot
-$autoHotkeyExe = Ensure-AutoHotkey
-Write-RemapScript -Path $scriptPath
-Stop-ExistingRemapProcess -ScriptPaths @($scriptPath, $legacyScriptPath, $legacyClaudeScriptPath)
-Remove-LegacyTask -TaskNames @('Codex Enter Newline Remap')
-$taskName = Register-RemapTask -ExecutablePath $autoHotkeyExe -ScriptPath $scriptPath
-Start-RemapProcess -ExecutablePath $autoHotkeyExe -ScriptPath $scriptPath
-Start-Sleep -Seconds 2
+    Write-Host '开始检查前置条件...'
+    $supportedApps = @(Resolve-SupportedApps)
+    if ($supportedApps.Count -eq 0) {
+        throw '未检测到 Codex 或 Claude 的可执行文件。请先安装至少一个目标应用，并至少启动一次后完全退出，再运行本脚本。'
+    }
 
-$process = Get-CimInstance Win32_Process |
-    Where-Object { $_.Name -match '^AutoHotkey' -and $_.CommandLine -and $_.CommandLine.Contains($scriptPath) } |
-    Select-Object -First 1
+    foreach ($app in $supportedApps) {
+        Write-Host ("  {0} -> {1}" -f $app.DisplayName, $app.Path)
+    }
 
-if (-not $process) {
-    throw 'The remap process did not start successfully.'
+    Ensure-Directory -Path $remapRoot
+    $autoHotkeyExe = Ensure-AutoHotkey
+    Write-Host ("  AutoHotkey -> {0}" -f $autoHotkeyExe)
+
+    Write-RemapScript -Path $scriptPath
+    Stop-ExistingRemapProcess -ScriptPaths @($scriptPath, $legacyScriptPath, $legacyClaudeScriptPath)
+    Remove-LegacyTask -TaskNames @('Codex Enter Newline Remap')
+    $taskName = Register-RemapTask -ExecutablePath $autoHotkeyExe -ScriptPath $scriptPath
+    Start-RemapProcess -ExecutablePath $autoHotkeyExe -ScriptPath $scriptPath
+    Start-Sleep -Seconds 2
+
+    $process = Get-CimInstance Win32_Process |
+        Where-Object { $_.Name -match '^AutoHotkey' -and $_.CommandLine -and $_.CommandLine.Contains($scriptPath) } |
+        Select-Object -First 1
+
+    if (-not $process) {
+        throw '热键脚本进程未能成功启动。请先确认 AutoHotkey v2 可以正常运行，再重新执行本脚本。'
+    }
+
+    Write-Host '聊天热键安装完成。'
+    Write-Host '  Enter -> 换行'
+    Write-Host '  Ctrl+Enter -> 发送'
+    Write-Host ("  Task -> {0}" -f $taskName)
+    Write-Host ("  Script -> {0}" -f $scriptPath)
 }
-
-Write-Host 'Ready: Enter -> newline, Ctrl+Enter -> send in Codex and Claude.'
-Write-Host ("Task: {0}" -f $taskName)
-Write-Host ("Script: {0}" -f $scriptPath)
+catch {
+    Fail-Install -Message $_.Exception.Message
+}
