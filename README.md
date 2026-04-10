@@ -38,6 +38,15 @@
 - `Install-Chat-Enter-Newline.cmd`
   安装聊天快捷键映射：`Enter` 换行，`Ctrl+Enter` 发送
 
+- `Export-Codex-Profile.cmd`
+  把当前机器上的 `%USERPROFILE%\.codex` 反向导出回仓库快照
+
+- `Export-Claude-Code-Profile.cmd`
+  把当前机器上的 `%USERPROFILE%\.claude` 和 Claude Desktop 设置反向导出回仓库快照
+
+- `Export-All.cmd`
+  统一导出入口。先做总预检，再按顺序导出 Codex / Claude 快照
+
 ## 新电脑首次使用
 
 建议按下面顺序操作。
@@ -119,6 +128,43 @@ cd D:\Setup
 
 如果这些应用在安装过程中已经开着，很多配置不会立即生效，所以一定要完全退出后再打开。
 
+## 反向同步到仓库
+
+这套仓库现在不仅支持“安装到新机器”，也支持“从当前机器导出回仓库快照”。
+
+推荐把日常同步流程改成：
+
+1. 在本机实际配置目录里完成修改
+2. 运行对应的 `Export-*.cmd`
+3. 检查 `git status`
+4. `git add` / `git commit` / `git push`
+5. 在其他机器上 `git pull`
+6. 重新运行对应的 `Install-*.cmd`
+
+### 导出命令
+
+如果你只改了 Codex 配置：
+
+```powershell
+.\Export-Codex-Profile.cmd
+```
+
+如果你只改了 Claude / Claude Desktop 配置：
+
+```powershell
+.\Export-Claude-Code-Profile.cmd
+```
+
+如果你想一次导出全部快照：
+
+```powershell
+.\Export-All.cmd
+```
+
+导出脚本会先检查目标快照路径在 Git 中是否有未提交改动。
+
+如果这些路径已经脏了，脚本会直接停止，避免把“本机新状态”和“仓库中未提交旧改动”混在一起。
+
 ## 脚本的保护行为
 
 当前这套脚本已经改成“先检查前置条件，再执行写入”。
@@ -132,6 +178,37 @@ cd D:\Setup
 这样做的目的，是避免新电脑还没装好软件时，脚本先写进去一半配置，最后留下一个半初始化状态。
 
 其中 [Install-All.cmd](D:/Setup/Install-All.cmd) 会在真正执行任何子脚本之前，先把所有选中步骤需要的前置条件一次性检查完。
+
+导出脚本也遵循相同原则：
+
+- 先检查 live source 是否存在
+- 先检查仓库目标路径是否有未提交改动
+- 全部通过后才覆盖仓库快照
+
+目录型快照现在统一使用 `staging + backup + rollback` 替换，而不是直接覆盖写入。
+
+## 脚本验证语义
+
+现在这套脚本不再把“命令执行完”当成成功，而是要求关键步骤通过验证。
+
+安装或导出完成后，脚本会按类型做这些校验：
+
+- 文件型快照：目标文件存在，且内容与源一致
+- 目录型快照：目标目录存在，且顶层条目集合与源一致
+- JSON 配置：目标文件可以再次解析
+- 管理员启动器：计划任务、launcher script、桌面快捷方式都存在
+- 聊天热键：计划任务、`.ahk` 脚本、AutoHotkey 进程都存在
+
+### Warning 与失败的区别
+
+现在的语义是：
+
+- 预检失败：直接终止
+- 执行失败：直接终止
+- 验证失败：直接终止
+- 仅 Claude Desktop GUI 扩展缺失：保留 warning，但不让整个安装失败
+
+也就是说，`Install-Claude-Code-Profile.cmd` 中如果只是 Desktop 扩展目录里还缺少某些扩展，脚本会明确列出这些扩展，但不会把整个步骤标成失败；因为这部分仍然需要你在 Claude Desktop 里手动装。
 
 ## 每个脚本具体做什么
 
@@ -216,26 +293,27 @@ cd D:\Setup
 
 这个仓库的正确使用方式不是“脚本自动同步”，而是：
 
-1. 在旧电脑修改仓库里的快照文件
-2. `git add` / `git commit` / `git push`
-3. 在新电脑执行 `git pull`
-4. 重跑对应安装脚本
+1. 在当前机器修改实际配置目录
+2. 运行对应的 `Export-*.cmd` 回写仓库快照
+3. `git add` / `git commit` / `git push`
+4. 在新电脑执行 `git pull`
+5. 重跑对应安装脚本
 
 例如：
 
-- 如果你只改了 `codex-profile/`，就只需要重跑 `Install-Codex-Profile.cmd`
-- 如果你只改了 `claude-code-profile/`，就只需要重跑 `Install-Claude-Code-Profile.cmd`
+- 如果你只改了 Codex 配置，就先运行 `Export-Codex-Profile.cmd`，再在目标机器重跑 `Install-Codex-Profile.cmd`
+- 如果你只改了 Claude 配置，就先运行 `Export-Claude-Code-Profile.cmd`，再在目标机器重跑 `Install-Claude-Code-Profile.cmd`
 
 ## 如何更新这份仓库
 
-如果你在旧电脑上直接改的是实际配置目录，而不是仓库目录，那么记得把变化同步回仓库。
+如果你在旧电脑上直接改的是实际配置目录，而不是仓库目录，那么不要再手动复制文件；直接运行导出脚本即可。
 
 例如：
 
-- `%USERPROFILE%\.codex\config.toml` 改了以后，要把对应内容更新回 `codex-profile/config.toml`
-- `%USERPROFILE%\.claude\settings.json` 改了以后，要把对应内容更新回 `claude-code-profile/settings.json`
+- `%USERPROFILE%\.codex\config.toml` 改了以后，运行 `.\Export-Codex-Profile.cmd`
+- `%USERPROFILE%\.claude\settings.json` 改了以后，运行 `.\Export-Claude-Code-Profile.cmd`
 
-否则你推到 GitHub 的还是旧快照，新电脑重新安装时就会恢复成旧状态。
+导出完成后，先看脚本打印出来的 `git status` 摘要，再决定提交哪些变更。
 
 ## 验证是否生效
 
@@ -259,6 +337,8 @@ cd D:\Setup
 ### Claude Desktop
 
 确认偏好和扩展设置已经同步。
+
+如果脚本只提示“缺少某些 Desktop 扩展需要手动安装”，这属于 warning，不代表整个安装失败。
 
 ### 管理员启动器
 
@@ -290,7 +370,9 @@ cd D:\Setup
 - Claude 已经至少启动过一次
 - 本机确实已经安装 Claude Code
 
-如果仍然失败，脚本会打印需要手动执行的插件安装命令。
+如果仍然失败，脚本会直接返回失败，并在输出中指出失败的插件项。
+
+现在如果插件安装步骤本身失败，脚本会直接返回失败，而不是静默继续。
 
 ### 3. 新电脑上脚本不生效
 
@@ -319,6 +401,18 @@ cd D:\Setup
 - 目标窗口不是 Codex / Claude
 - `winget` 自动安装 AutoHotkey 超时或失败
 
+### 6. Export 脚本拒绝覆盖仓库快照
+
+最常见原因是目标快照路径已经有未提交改动。
+
+解决方法：
+
+1. 先运行 `git status`
+2. 提交、暂存或清理这些改动
+3. 再重新运行对应的 `Export-*.cmd`
+
+这是故意设计的保护行为，不是 bug。
+
 ## 推荐使用顺序
 
 新电脑上建议固定按这个顺序操作：
@@ -334,10 +428,18 @@ cd D:\Setup
 
 这个仓库现在的定位很明确：
 
-它是你自己的 Windows AI 开发环境迁移仓库，用 GitHub 保存快照，用本地 `.cmd` 脚本把快照恢复到新电脑。
+它是你自己的 Windows AI 开发环境迁移仓库，用 GitHub 保存快照，用本地 `.cmd` 脚本在机器之间导入和导出配置。
+
+目前它已经具备：
+
+- 安装入口
+- 导出入口
+- 统一预检
+- 共享 PowerShell 运行层
+- 关键步骤的显式验证
 
 如果以后还要继续优化，最值得做的下一步通常是：
 
-- 给每个脚本增加更明确的成功/失败验证输出
-- 增加“从本机配置目录反向导出到仓库”的同步脚本
+- 给导出和安装步骤增加更细的差异摘要，而不只是 `git status` 摘要
+- 为脚本补更多临时目录级别的自动化自检
 - 把常见排障步骤做成单独文档
