@@ -35,6 +35,7 @@ try {
     }
 
     Write-Host ("  Codex -> {0}" -f $codexExe)
+    Assert-ProcessesStopped -Label 'Codex' -ProcessNames @('Codex.exe', 'codex.exe')
 
     Ensure-Directory -Path $codexRoot
     Copy-FileSnapshot -SourcePath $configSourcePath -DestinationPath $configTargetPath
@@ -43,7 +44,7 @@ try {
 
     Assert-FilesMatch -SourcePath $configSourcePath -DestinationPath $configTargetPath -Label 'config.toml'
     Assert-FilesMatch -SourcePath $agentsSourcePath -DestinationPath $agentsTargetPath -Label 'AGENTS.md'
-    Assert-DirectoryTopLevelMatch -SourcePath $skillsSourcePath -DestinationPath $skillsTargetPath -Label 'skills'
+    Assert-DirectorySnapshotMatch -SourcePath $skillsSourcePath -DestinationPath $skillsTargetPath -Label 'skills'
 
     Write-Host ''
     Write-Host 'Codex 配置恢复完成。'

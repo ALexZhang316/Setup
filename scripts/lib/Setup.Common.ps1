@@ -168,7 +168,30 @@ function Assert-JsonFile {
     }
 }
 
-function Get-TopLevelDirectorySignature {
+function Get-RelativePathWithinRoot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $resolvedRoot = (Resolve-Path -LiteralPath $RootPath).Path.TrimEnd('\')
+    $resolvedPath = (Resolve-Path -LiteralPath $Path).Path
+
+    if ($resolvedPath.Length -le $resolvedRoot.Length) {
+        return ''
+    }
+
+    if (-not $resolvedPath.StartsWith(("{0}\" -f $resolvedRoot), [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw ("路径不在根目录内：{0}" -f $resolvedPath)
+    }
+
+    return $resolvedPath.Substring($resolvedRoot.Length + 1)
+}
+
+function Get-DirectorySnapshotSignature {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Path
@@ -178,15 +201,25 @@ function Get-TopLevelDirectorySignature {
         return @()
     }
 
-    return @(Get-ChildItem -LiteralPath $Path -Force |
-        Sort-Object Name |
-        ForEach-Object {
-            $entryType = if ($_.PSIsContainer) { 'D' } else { 'F' }
-            "{0}:{1}" -f $entryType, $_.Name
-        })
+    $entries = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($entry in @(Get-ChildItem -LiteralPath $Path -Force -Recurse | Sort-Object FullName)) {
+        $relativePath = Get-RelativePathWithinRoot -RootPath $Path -Path $entry.FullName
+        if ([string]::IsNullOrWhiteSpace($relativePath)) {
+            continue
+        }
+
+        if ($entry.PSIsContainer) {
+            $entries.Add(("D:{0}" -f $relativePath)) | Out-Null
+            continue
+        }
+
+        $entries.Add(("F:{0}:{1}" -f $relativePath, (Get-FileSha256 -Path $entry.FullName))) | Out-Null
+    }
+
+    return $entries.ToArray()
 }
 
-function Assert-DirectoryTopLevelMatch {
+function Assert-DirectorySnapshotMatch {
     param(
         [Parameter(Mandatory = $true)]
         [string]$SourcePath,
@@ -206,12 +239,125 @@ function Assert-DirectoryTopLevelMatch {
         throw ("缺少目标目录 {0}：{1}" -f $Label, $DestinationPath)
     }
 
-    $sourceSignature = @(Get-TopLevelDirectorySignature -Path $SourcePath)
-    $destinationSignature = @(Get-TopLevelDirectorySignature -Path $DestinationPath)
+    $sourceSignature = @(Get-DirectorySnapshotSignature -Path $SourcePath)
+    $destinationSignature = @(Get-DirectorySnapshotSignature -Path $DestinationPath)
 
     if (($sourceSignature -join "`n") -ne ($destinationSignature -join "`n")) {
-        throw ("{0} 顶层条目校验失败：目标目录与源目录不一致。" -f $Label)
+        throw ("{0} 目录快照校验失败：目标目录与源目录递归内容不一致。" -f $Label)
     }
+}
+
+function Test-CommandLineContainsPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$CommandLine,
+
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$Path
+    )
+
+    if ([string]::IsNullOrWhiteSpace($CommandLine) -or [string]::IsNullOrWhiteSpace($Path)) {
+        return $false
+    }
+
+    $resolvedPath = $Path
+    if (Test-Path -LiteralPath $Path) {
+        $resolvedPath = (Resolve-Path -LiteralPath $Path).Path
+    }
+
+    $normalizedCommandLine = $CommandLine.Replace('/', '\')
+    $normalizedPath = $resolvedPath.Replace('/', '\')
+    return ($normalizedCommandLine.IndexOf($normalizedPath, [System.StringComparison]::OrdinalIgnoreCase) -ge 0)
+}
+
+function Get-RunningProcessRecords {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$ProcessNames
+    )
+
+    $normalizedNames = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($processName in @($ProcessNames | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
+        $trimmedName = $processName.Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmedName)) {
+            continue
+        }
+
+        $normalizedNames.Add($trimmedName) | Out-Null
+        if ($trimmedName -like '*.exe') {
+            $normalizedNames.Add($trimmedName.Substring(0, $trimmedName.Length - 4)) | Out-Null
+        }
+        else {
+            $normalizedNames.Add(("{0}.exe" -f $trimmedName)) | Out-Null
+        }
+    }
+
+    if ($normalizedNames.Count -eq 0) {
+        return @()
+    }
+
+    return @(
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+            Where-Object { $normalizedNames.Contains($_.Name) } |
+            Sort-Object Name, ProcessId
+    )
+}
+
+function Assert-ProcessesStopped {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Label,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$ProcessNames
+    )
+
+    $runningProcesses = @(Get-RunningProcessRecords -ProcessNames $ProcessNames)
+    if ($runningProcesses.Count -eq 0) {
+        return
+    }
+
+    $processSummary = @(
+        $runningProcesses |
+            ForEach-Object { "{0} (PID {1})" -f $_.Name, $_.ProcessId }
+    ) -join '、'
+
+    throw ("检测到正在运行的 {0} 进程：{1}。请先完全退出相关应用后再运行本脚本。" -f $Label, $processSummary)
+}
+
+function Assert-DirectoryTopLevelMatch {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourcePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DestinationPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Label
+    )
+
+    Assert-DirectorySnapshotMatch -SourcePath $SourcePath -DestinationPath $DestinationPath -Label $Label
+}
+
+function Get-TopLevelDirectorySignature {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return @()
+    }
+
+    return @(Get-ChildItem -LiteralPath $Path -Force |
+        Sort-Object Name |
+        ForEach-Object {
+            $entryType = if ($_.PSIsContainer) { 'D' } else { 'F' }
+            "{0}:{1}" -f $entryType, $_.Name
+        })
 }
 
 function Get-WindowsPowerShellPath {

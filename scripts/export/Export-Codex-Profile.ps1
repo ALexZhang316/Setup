@@ -50,7 +50,7 @@ try {
 
     Assert-FilesMatch -SourcePath $configSourcePath -DestinationPath $configSnapshotPath -Label 'config.toml'
     Assert-FilesMatch -SourcePath $agentsSourcePath -DestinationPath $agentsSnapshotPath -Label 'AGENTS.md'
-    Assert-DirectoryTopLevelMatch -SourcePath $skillsSourcePath -DestinationPath $skillsSnapshotPath -Label 'skills'
+    Assert-DirectorySnapshotMatch -SourcePath $skillsSourcePath -DestinationPath $skillsSnapshotPath -Label 'skills'
 
     Write-Host 'Codex 配置导出完成。'
     Write-Host ("  live source -> {0}" -f $sourceRoot)

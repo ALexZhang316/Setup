@@ -126,7 +126,7 @@ cd D:\Setup
 - Claude
 - Claude Desktop
 
-如果这些应用在安装过程中已经开着，很多配置不会立即生效，所以一定要完全退出后再打开。
+如果这些应用在安装过程中已经开着，很多配置会被占用或在退出时被应用回写，所以必须先完全退出，再运行安装脚本。
 
 ## 反向同步到仓库
 
@@ -194,7 +194,7 @@ cd D:\Setup
 安装或导出完成后，脚本会按类型做这些校验：
 
 - 文件型快照：目标文件存在，且内容与源一致
-- 目录型快照：目标目录存在，且顶层条目集合与源一致
+- 目录型快照：目标目录存在，且递归条目集合与文件内容哈希都与源一致
 - JSON 配置：目标文件可以再次解析
 - 管理员启动器：计划任务、launcher script、桌面快捷方式都存在
 - 聊天热键：计划任务、`.ahk` 脚本、AutoHotkey 进程都存在
@@ -229,8 +229,8 @@ cd D:\Setup
 前置条件：
 
 - 已安装 Codex
-- 最好至少启动过一次 Codex
-- 运行脚本时，Codex 最好已经完全退出
+- 必须至少启动过一次 Codex
+- 运行脚本前，Codex 必须已经完全退出；现在脚本会检测到运行中进程并直接失败
 
 ### Install-Claude-Code-Profile.cmd
 
@@ -254,7 +254,7 @@ cd D:\Setup
 - 已安装 Git
 - 至少启动过一次 Claude Code
 - 如果要同步 Claude Desktop 设置，也要先安装并启动过一次 Claude Desktop
-- 运行脚本时，Claude Code / Claude Desktop 最好都已完全退出
+- 运行脚本前，Claude Code / Claude Desktop 必须都已完全退出；现在脚本会检测到运行中进程并直接失败
 
 ### Install-Admin-Launchers.cmd
 

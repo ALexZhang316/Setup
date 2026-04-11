@@ -55,16 +55,33 @@ try {
         Assert-FilesMatch -SourcePath $hashSource -DestinationPath $hashTarget -Label 'hash-equality'
     }
 
+    $currentProcessName = (Get-Process -Id $PID).Name
+    $runningCurrentProcess = @(Get-RunningProcessRecords -ProcessNames @($currentProcessName))
+    if ($runningCurrentProcess.Count -eq 0) {
+        throw '运行中进程检测校验失败。'
+    }
+
+    Assert-Throws -Label 'running-process-detection' -ScriptBlock {
+        Assert-ProcessesStopped -Label 'current-shell' -ProcessNames @($currentProcessName)
+    }
+
     $dirSource = Join-Path $tempRoot 'dir-source'
     $dirTarget = Join-Path $tempRoot 'dir-target'
     Ensure-Directory -Path (Join-Path $dirSource 'nested')
     Set-Content -LiteralPath (Join-Path $dirSource 'file.txt') -Value 'source' -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $dirSource 'nested\child.txt') -Value 'child-source' -Encoding UTF8
     Sync-DirectorySnapshot -SourcePath $dirSource -DestinationPath $dirTarget
-    Assert-DirectoryTopLevelMatch -SourcePath $dirSource -DestinationPath $dirTarget -Label 'dir-sync'
+    Assert-DirectorySnapshotMatch -SourcePath $dirSource -DestinationPath $dirTarget -Label 'dir-sync'
 
+    Set-Content -LiteralPath (Join-Path $dirTarget 'nested\child.txt') -Value 'child-different' -Encoding UTF8
+    Assert-Throws -Label 'dir-nested-content-mismatch' -ScriptBlock {
+        Assert-DirectorySnapshotMatch -SourcePath $dirSource -DestinationPath $dirTarget -Label 'dir-sync'
+    }
+
+    Set-Content -LiteralPath (Join-Path $dirTarget 'nested\child.txt') -Value 'child-source' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $dirTarget 'extra.txt') -Value 'extra' -Encoding UTF8
-    Assert-Throws -Label 'dir-mismatch' -ScriptBlock {
-        Assert-DirectoryTopLevelMatch -SourcePath $dirSource -DestinationPath $dirTarget -Label 'dir-sync'
+    Assert-Throws -Label 'dir-extra-entry-mismatch' -ScriptBlock {
+        Assert-DirectorySnapshotMatch -SourcePath $dirSource -DestinationPath $dirTarget -Label 'dir-sync'
     }
 
     $gitRepo = Join-Path $tempRoot 'git-repo'
@@ -97,16 +114,34 @@ try {
 
     Ensure-Directory -Path (Join-Path $env:APPDATA 'Claude')
     Ensure-Directory -Path (Join-Path $env:LOCALAPPDATA 'Packages\Claude.Test\LocalCache\Roaming\Claude')
+    $appDataCliRoot = Join-Path $env:APPDATA 'Claude\claude-code'
+    Ensure-Directory -Path (Join-Path $appDataCliRoot '1.9.0')
+    Ensure-Directory -Path (Join-Path $appDataCliRoot '1.10.0')
+    Ensure-Directory -Path (Join-Path $appDataCliRoot 'v2.0.0-beta')
+    Ensure-Directory -Path (Join-Path $appDataCliRoot 'v2.0.0')
+    Set-Content -LiteralPath (Join-Path $appDataCliRoot '1.9.0\claude.exe') -Value '' -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $appDataCliRoot '1.10.0\claude.exe') -Value '' -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $appDataCliRoot 'v2.0.0-beta\claude.exe') -Value '' -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $appDataCliRoot 'v2.0.0\claude.exe') -Value '' -Encoding UTF8
     $canonicalDesktopRoot = Get-CanonicalClaudeDesktopRoot
     $expectedDesktopRoot = Join-Path $env:APPDATA 'Claude'
     if ($canonicalDesktopRoot -ne $expectedDesktopRoot) {
         throw 'Claude Desktop 根目录优先级校验失败。'
     }
 
+    $resolvedClaudeCli = Get-ClaudeCliPath
+    if ($resolvedClaudeCli -notlike '*v2.0.0\claude.exe') {
+        throw ("Claude CLI 版本目录排序校验失败：{0}" -f $resolvedClaudeCli)
+    }
+
     Remove-Item -LiteralPath $expectedDesktopRoot -Recurse -Force
     $fallbackDesktopRoot = Get-CanonicalClaudeDesktopRoot
     if ($fallbackDesktopRoot -notlike '*Packages\Claude.Test\LocalCache\Roaming\Claude') {
         throw 'Claude Desktop packaged root 回退校验失败。'
+    }
+
+    if (-not (Test-CommandLineContainsPath -CommandLine 'AUTOHOTKEY64.EXE "C:/TEMP/CHATENTERNEWLINE.AHK"' -Path 'C:\Temp\ChatEnterNewline.ahk')) {
+        throw '命令行路径匹配校验失败。'
     }
 
     Write-Host 'Setup 自检通过。'

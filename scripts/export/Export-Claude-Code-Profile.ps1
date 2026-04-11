@@ -114,7 +114,7 @@ try {
         Assert-FilesMatch -SourcePath $desktopInstallationsSourcePath -DestinationPath $desktopInstallationsSnapshotPath -Label 'extensions-installations.json'
         Assert-JsonFile -Path $desktopConfigSnapshotPath -Label 'claude_desktop_config.json'
         Assert-JsonFile -Path $desktopInstallationsSnapshotPath -Label 'extensions-installations.json'
-        Assert-DirectoryTopLevelMatch -SourcePath $settingsSyncResult.ValidationSourcePath -DestinationPath $desktopSettingsSnapshotPath -Label 'extension-settings'
+        Assert-DirectorySnapshotMatch -SourcePath $settingsSyncResult.ValidationSourcePath -DestinationPath $desktopSettingsSnapshotPath -Label 'extension-settings'
 
         if ($settingsSyncResult.CleanupPath -and (Test-Path -LiteralPath $settingsSyncResult.CleanupPath)) {
             Remove-Item -LiteralPath $settingsSyncResult.CleanupPath -Recurse -Force

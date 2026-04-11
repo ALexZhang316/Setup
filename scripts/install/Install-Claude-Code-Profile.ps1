@@ -111,6 +111,7 @@ try {
     }
 
     Write-Host ("  Claude Code CLI -> {0}" -f $claudeCmd)
+    Assert-ProcessesStopped -Label 'Claude / Claude Desktop' -ProcessNames @('Claude.exe', 'claude.exe')
 
     if ($plugins.Count -gt 0) {
         $gitCmd = Get-GitCommand
@@ -230,7 +231,7 @@ try {
             foreach ($targetRoot in $claudeDesktopRoots) {
                 $extSettingsDstDir = Join-Path $targetRoot 'Claude Extensions Settings'
                 Sync-DirectorySnapshot -SourcePath $extSettingsSrcDir -DestinationPath $extSettingsDstDir
-                Assert-DirectoryTopLevelMatch -SourcePath $extSettingsSrcDir -DestinationPath $extSettingsDstDir -Label 'Claude Extensions Settings'
+                Assert-DirectorySnapshotMatch -SourcePath $extSettingsSrcDir -DestinationPath $extSettingsDstDir -Label 'Claude Extensions Settings'
                 Write-Host ("  extension settings -> {0}" -f $extSettingsDstDir)
             }
         }

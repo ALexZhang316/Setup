@@ -75,7 +75,7 @@ function Stop-ExistingRemapProcess {
             $proc.CommandLine -and
             ($ScriptPaths | Where-Object {
                 $path = $_
-                $path -and $proc.CommandLine.Contains($path)
+                $path -and (Test-CommandLineContainsPath -CommandLine $proc.CommandLine -Path $path)
             })
         } |
         ForEach-Object {
@@ -167,7 +167,7 @@ try {
     Start-Sleep -Seconds 2
 
     $process = Get-CimInstance Win32_Process |
-        Where-Object { $_.Name -match '^AutoHotkey' -and $_.CommandLine -and $_.CommandLine.Contains($scriptPath) } |
+        Where-Object { $_.Name -match '^AutoHotkey' -and $_.CommandLine -and (Test-CommandLineContainsPath -CommandLine $_.CommandLine -Path $scriptPath) } |
         Select-Object -First 1
 
     if (-not $process) {

@@ -38,6 +38,45 @@ function Add-UniquePath {
     $Paths.Add($normalizedPath) | Out-Null
 }
 
+function Get-VersionLikeDirectoryOrder {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.IO.DirectoryInfo[]]$Directories
+    )
+
+    $decoratedDirectories = foreach ($directory in $Directories) {
+        $name = $directory.Name.Trim()
+        $versionCandidate = $name.TrimStart('v', 'V')
+        $numericPart = $versionCandidate
+        $suffix = ''
+
+        if ($versionCandidate -match '^([0-9]+(?:\.[0-9]+){0,3})(.*)$') {
+            $numericPart = $matches[1]
+            $suffix = $matches[2]
+        }
+
+        $version = $null
+        $isVersion = [version]::TryParse($numericPart, [ref]$version)
+        [pscustomobject]@{
+            Directory = $directory
+            IsVersion = if ($isVersion) { 1 } else { 0 }
+            Version = if ($isVersion) { $version } else { [version]'0.0' }
+            HasSuffix = if ([string]::IsNullOrWhiteSpace($suffix)) { 0 } else { 1 }
+            Name = $name
+        }
+    }
+
+    return @(
+        $decoratedDirectories |
+            Sort-Object `
+                @{ Expression = { $_.IsVersion }; Descending = $true },
+                @{ Expression = { $_.Version }; Descending = $true },
+                @{ Expression = { $_.HasSuffix }; Descending = $false },
+                @{ Expression = { $_.Name }; Descending = $true } |
+            ForEach-Object { $_.Directory }
+    )
+}
+
 function Get-GitCommand {
     $command = Get-Command 'git.exe', 'git' -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($command) {
@@ -91,7 +130,7 @@ function Get-ClaudeCliPath {
 
     $appDataCliRoot = Join-Path $env:APPDATA 'Claude\claude-code'
     if (Test-Path -LiteralPath $appDataCliRoot) {
-        foreach ($versionDir in Get-ChildItem -LiteralPath $appDataCliRoot -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending) {
+        foreach ($versionDir in Get-VersionLikeDirectoryOrder -Directories @(Get-ChildItem -LiteralPath $appDataCliRoot -Directory -ErrorAction SilentlyContinue)) {
             Add-UniquePath -Seen $seen -Paths $candidates -Path (Join-Path $versionDir.FullName 'claude.exe') -RequireExists
         }
     }
@@ -108,7 +147,7 @@ function Get-ClaudeCliPath {
                 continue
             }
 
-            foreach ($versionDir in Get-ChildItem -LiteralPath $cliRoot -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending) {
+            foreach ($versionDir in Get-VersionLikeDirectoryOrder -Directories @(Get-ChildItem -LiteralPath $cliRoot -Directory -ErrorAction SilentlyContinue)) {
                 Add-UniquePath -Seen $seen -Paths $candidates -Path (Join-Path $versionDir.FullName 'claude.exe') -RequireExists
             }
         }

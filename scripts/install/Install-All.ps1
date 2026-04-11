@@ -71,6 +71,9 @@ try {
     }
     else {
         Write-Host ("  Codex -> {0}" -f $codexExe)
+        if (@(Get-RunningProcessRecords -ProcessNames @('Codex.exe', 'codex.exe')).Count -gt 0) {
+            $issues.Add('检测到 Codex 仍在运行。请先完全退出 Codex，再执行统一安装。') | Out-Null
+        }
     }
 
     $claudeCli = Get-ClaudeCliPath
@@ -79,6 +82,9 @@ try {
     }
     else {
         Write-Host ("  Claude Code CLI -> {0}" -f $claudeCli)
+        if (@(Get-RunningProcessRecords -ProcessNames @('Claude.exe', 'claude.exe')).Count -gt 0) {
+            $issues.Add('检测到 Claude / Claude Desktop 仍在运行。请先完全退出相关应用，再执行统一安装。') | Out-Null
+        }
     }
 
     $gitCmd = Get-GitCommand
