@@ -1,7 +1,7 @@
 @echo off
 setlocal
 for %%I in ("%~dp0.") do set "REPO_ROOT=%%~fI"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%\tools\Install-Chat-Enter-Newline.ps1" -RepoRoot "%REPO_ROOT%"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%\sync-to-local.ps1" -RepoRoot "%REPO_ROOT%"
 set "EXIT_CODE=%ERRORLEVEL%"
 if not "%EXIT_CODE%"=="0" (
     echo.

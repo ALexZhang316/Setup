@@ -1,14 +1,11 @@
 @echo off
 setlocal
-set "REPO_ROOT=%~dp0"
-
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%scripts\install\Install-Admin-Launchers.ps1" -RepoRoot "%REPO_ROOT%"
+for %%I in ("%~dp0.") do set "REPO_ROOT=%%~fI"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%\tools\Install-Admin-Launchers.ps1" -RepoRoot "%REPO_ROOT%"
 set "EXIT_CODE=%ERRORLEVEL%"
-
 if not "%EXIT_CODE%"=="0" (
     echo.
-    echo 安装失败，退出码 %EXIT_CODE%。
+    echo Failed with exit code %EXIT_CODE%.
     pause
 )
-
 exit /b %EXIT_CODE%
