@@ -20,10 +20,10 @@ tools/
 
 | 脚本 | 作用 |
 |------|------|
-| `Sync-To-Local.cmd` | 把仓库快照还原到本机 |
-| `Sync-To-Repo.cmd` | 把本机当前配置导出回仓库 |
-| `Install-Admin-Launchers.cmd` | 创建 Codex/Claude 的管理员启动快捷方式 |
-| `Install-Chat-Enter-Newline.cmd` | 安装聊天热键：Enter 换行，Ctrl+Enter 发送 |
+| `还原配置.cmd` | 把仓库快照还原到本机 |
+| `备份配置.cmd` | 把本机当前配置导出回仓库 |
+| `安装管理员启动器.cmd` | 创建 Codex/Claude 的管理员启动快捷方式 |
+| `安装聊天热键.cmd` | 安装聊天热键：Enter 换行，Ctrl+Enter 发送 |
 
 ## 新电脑首次使用
 
@@ -49,7 +49,7 @@ cd D:\Setup
 ### 4. 运行同步脚本
 
 ```powershell
-.\Sync-To-Local.cmd
+.\还原配置.cmd
 ```
 
 脚本会把仓库中的配置文件复制到本机对应位置。未检测到的应用会自动跳过。
@@ -57,8 +57,8 @@ cd D:\Setup
 ### 5. 按需运行可选工具
 
 ```powershell
-.\Install-Admin-Launchers.cmd      # 管理员启动器（需要 UAC）
-.\Install-Chat-Enter-Newline.cmd   # 聊天热键（需要 AutoHotkey v2）
+.\安装管理员启动器.cmd      # 需要 UAC
+.\安装聊天热键.cmd          # 需要 AutoHotkey v2
 ```
 
 ### 6. 重启应用
@@ -68,9 +68,9 @@ cd D:\Setup
 ## 日常同步
 
 1. 在本机修改实际配置
-2. 运行 `Sync-To-Repo.cmd` 导出到仓库
+2. 运行 `备份配置.cmd` 导出到仓库
 3. `git add` / `git commit` / `git push`
-4. 在其他机器 `git pull` 后运行 `Sync-To-Local.cmd`
+4. 在其他机器 `git pull` 后运行 `还原配置.cmd`
 
 ## 路径映射
 
