@@ -48,9 +48,16 @@ function Find-AppExe {
         }
     }
 
-    # 再查常见安装路径
-    foreach ($base in @($env:LOCALAPPDATA, $env:ProgramFiles, ${env:ProgramFiles(x86)})) {
-        if (-not $base) { continue }
+    # 再查常见安装路径（含 per-user Programs 子目录）
+    $searchBases = @()
+    if ($env:LOCALAPPDATA) {
+        $searchBases += Join-Path $env:LOCALAPPDATA "Programs"
+        $searchBases += $env:LOCALAPPDATA
+    }
+    if ($env:ProgramFiles)        { $searchBases += $env:ProgramFiles }
+    if (${env:ProgramFiles(x86)}) { $searchBases += ${env:ProgramFiles(x86)} }
+
+    foreach ($base in $searchBases) {
         foreach ($exe in $ExeNames) {
             $path = Join-Path $base "$AppName\$exe"
             if (Test-Path $path) { return $path }
@@ -91,9 +98,16 @@ foreach ($pattern in $app.Packages) {
     }
 }
 
-foreach ($base in @($env:LOCALAPPDATA, $env:ProgramFiles, ${env:ProgramFiles(x86)})) {
-    if (-not $base) { continue }
-    $name = if ($AppId -eq 'codex') { 'Codex' } else { 'Claude' }
+$name = if ($AppId -eq 'codex') { 'Codex' } else { 'Claude' }
+$searchBases = @()
+if ($env:LOCALAPPDATA) {
+    $searchBases += Join-Path $env:LOCALAPPDATA 'Programs'
+    $searchBases += $env:LOCALAPPDATA
+}
+if ($env:ProgramFiles)        { $searchBases += $env:ProgramFiles }
+if (${env:ProgramFiles(x86)}) { $searchBases += ${env:ProgramFiles(x86)} }
+
+foreach ($base in $searchBases) {
     foreach ($exe in $app.Exes) {
         $path = Join-Path $base "$name\$exe"
         if (Test-Path $path) { Start-Process $path; return }

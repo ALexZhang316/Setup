@@ -1,5 +1,5 @@
 ﻿# sync-to-local.ps1 — 把仓库快照还原到本机对应位置
-# 用法：双击 Sync-To-Local.cmd，或手动执行本脚本
+# 用法：双击 还原配置.cmd，或手动执行本脚本
 
 param(
     [string]$RepoRoot
@@ -42,7 +42,7 @@ function Get-ClaudeDesktopPath {
     return $null
 }
 
-# ---------- 安全目录同步（先复制到临时位置，成功后再替换）----------
+# ---------- 安全目录同步（先复制到临时位置，旧目录改名为备份，再替换）----------
 
 function Sync-Directory {
     param(
@@ -52,24 +52,56 @@ function Sync-Directory {
 
     $parent = Split-Path -Parent $Destination
     $name   = Split-Path -Leaf $Destination
-    $tempDest = Join-Path $parent (".sync-staging-$name")
+    $staging = Join-Path $parent (".sync-staging-$name")
+    $backup  = Join-Path $parent (".sync-backup-$name")
 
     # 1. 复制到临时目录
-    if (Test-Path $tempDest) {
-        Remove-Item -LiteralPath $tempDest -Recurse -Force
-    }
-    Copy-Item -LiteralPath $Source -Destination $tempDest -Recurse -Force
+    if (Test-Path $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
+    Copy-Item -LiteralPath $Source -Destination $staging -Recurse -Force
 
-    # 2. 验证临时目录存在（复制成功）
-    if (-not (Test-Path $tempDest)) {
-        throw "复制到临时目录失败: $tempDest"
+    if (-not (Test-Path $staging)) {
+        throw "复制到临时目录失败: $staging"
     }
 
-    # 3. 删除旧目标、把临时目录重命名为正式目标
+    # 2. 尝试原子替换：旧目录改名为备份 → 临时目录改名为正式目标
+    $renamed = $false
     if (Test-Path $Destination) {
-        Remove-Item -LiteralPath $Destination -Recurse -Force
+        if (Test-Path $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
+        try {
+            Rename-Item -LiteralPath $Destination -NewName ".sync-backup-$name"
+            $renamed = $true
+        } catch {
+            # 目录被占用无法重命名（比如应用正在运行），回退到直接覆写
+        }
     }
-    Rename-Item -LiteralPath $tempDest -NewName $name
+
+    if ($renamed) {
+        # 原子路径：把临时目录改名为正式目标
+        try {
+            Rename-Item -LiteralPath $staging -NewName $name
+        } catch {
+            # 重命名失败 → 回滚
+            if (Test-Path $backup) {
+                Rename-Item -LiteralPath $backup -NewName $name -ErrorAction SilentlyContinue
+            }
+            throw "目录替换失败，已回滚: $_"
+        }
+        # 替换成功，删除备份
+        if (Test-Path $backup) {
+            Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    } else {
+        # 回退路径：直接删除旧内容再复制（目录被占用时的兜底）
+        if (Test-Path $Destination) {
+            Remove-Item -LiteralPath $Destination -Recurse -Force
+        }
+        Rename-Item -LiteralPath $staging -NewName $name
+    }
+
+    # 清理残留的临时目录
+    if (Test-Path $staging) {
+        Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # ---------- 路径映射表 ----------
@@ -121,6 +153,49 @@ foreach ($m in $mappings) {
 
     Write-Host ("[完成] {0} -> {1}" -f $m.Repo, $m.Local)
     $ok++
+}
+
+# ---------- Claude Code 插件安装 ----------
+
+$settingsPath = Join-Path $RepoRoot 'profiles\claude-code\settings.json'
+if (Test-Path $settingsPath) {
+    $claudeExe = Get-Command claude -ErrorAction SilentlyContinue
+    if ($claudeExe) {
+        try {
+            $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
+            $pluginIds = @()
+            if ($settings.enabledPlugins) {
+                # enabledPlugins 是一个对象，键就是插件 ID
+                $pluginIds = @($settings.enabledPlugins.PSObject.Properties.Name)
+            }
+
+            if ($pluginIds.Count -gt 0) {
+                Write-Host ''
+                Write-Host ("正在安装 {0} 个 Claude Code 插件..." -f $pluginIds.Count)
+                $pluginOk = 0
+                $pluginFail = 0
+
+                foreach ($id in $pluginIds) {
+                    try {
+                        & claude plugin install $id --scope user 2>&1 | Out-Null
+                        Write-Host ("  [完成] {0}" -f $id)
+                        $pluginOk++
+                    } catch {
+                        Write-Host ("  [失败] {0}: {1}" -f $id, $_.Exception.Message) -ForegroundColor Yellow
+                        $pluginFail++
+                    }
+                }
+
+                if ($pluginFail -gt 0) {
+                    Write-Host ("[警告] {0} 个插件安装失败，可稍后手动安装。" -f $pluginFail) -ForegroundColor Yellow
+                }
+            }
+        } catch {
+            Write-Host ("[警告] 插件安装跳过: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host '[跳过] 未找到 claude CLI，跳过插件安装。' -ForegroundColor Yellow
+    }
 }
 
 # ---------- 摘要 ----------

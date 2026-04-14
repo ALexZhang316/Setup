@@ -25,3 +25,6 @@ enabled = true
 
 [plugins."google-drive@openai-curated"]
 enabled = true
+
+[projects.'D:\Fre']
+trust_level = "trusted"

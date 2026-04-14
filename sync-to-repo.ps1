@@ -39,6 +39,22 @@ function Get-ClaudeDesktopPath {
     return $null
 }
 
+# ---------- Git 未提交改动检查 ----------
+
+function Test-GitDirty {
+    param([string]$Root, [string[]]$Paths)
+
+    $git = Get-Command git -ErrorAction SilentlyContinue
+    if (-not $git) { return @() }
+
+    $dirty = @()
+    foreach ($p in $Paths) {
+        $lines = & git -C $Root status --short -- $p 2>$null
+        if ($lines) { $dirty += $lines }
+    }
+    return $dirty
+}
+
 # ---------- 安全目录同步 ----------
 
 function Sync-Directory {
@@ -47,23 +63,57 @@ function Sync-Directory {
         [string]$Destination
     )
 
-    $parent = Split-Path -Parent $Destination
-    $name   = Split-Path -Leaf $Destination
-    $tempDest = Join-Path $parent (".sync-staging-$name")
+    $parent  = Split-Path -Parent $Destination
+    $name    = Split-Path -Leaf $Destination
+    $staging = Join-Path $parent (".sync-staging-$name")
+    $backup  = Join-Path $parent (".sync-backup-$name")
 
-    if (Test-Path $tempDest) {
-        Remove-Item -LiteralPath $tempDest -Recurse -Force
+    if (Test-Path $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
+    Copy-Item -LiteralPath $Source -Destination $staging -Recurse -Force
+
+    if (-not (Test-Path $staging)) {
+        throw "复制到临时目录失败: $staging"
     }
-    Copy-Item -LiteralPath $Source -Destination $tempDest -Recurse -Force
 
-    if (-not (Test-Path $tempDest)) {
-        throw "复制到临时目录失败: $tempDest"
-    }
-
+    # 尝试原子替换：旧目录改名为备份 → 临时目录改名为正式目标
+    $renamed = $false
     if (Test-Path $Destination) {
-        Remove-Item -LiteralPath $Destination -Recurse -Force
+        if (Test-Path $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
+        try {
+            Rename-Item -LiteralPath $Destination -NewName ".sync-backup-$name"
+            $renamed = $true
+        } catch {
+            # 目录被占用无法重命名（比如应用正在运行），回退到直接覆写
+        }
     }
-    Rename-Item -LiteralPath $tempDest -NewName $name
+
+    if ($renamed) {
+        # 原子路径：把临时目录改名为正式目标
+        try {
+            Rename-Item -LiteralPath $staging -NewName $name
+        } catch {
+            # 重命名失败 → 回滚
+            if (Test-Path $backup) {
+                Rename-Item -LiteralPath $backup -NewName $name -ErrorAction SilentlyContinue
+            }
+            throw "目录替换失败，已回滚: $_"
+        }
+        # 替换成功，删除备份
+        if (Test-Path $backup) {
+            Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    } else {
+        # 回退路径：直接删除旧内容再复制（目录被占用时的兜底）
+        if (Test-Path $Destination) {
+            Remove-Item -LiteralPath $Destination -Recurse -Force
+        }
+        Rename-Item -LiteralPath $staging -NewName $name
+    }
+
+    # 清理残留的临时目录
+    if (Test-Path $staging) {
+        Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # ---------- 路径映射表（方向：本机 -> 仓库）----------
@@ -85,6 +135,18 @@ if ($desktopPath) {
     )
 } else {
     Write-Host '[跳过] 未检测到 Claude Desktop，跳过桌面端配置。' -ForegroundColor Yellow
+}
+
+# ---------- 检查仓库中是否有未提交改动 ----------
+
+$repoPaths = @($mappings | ForEach-Object { $_.Repo })
+$dirtyLines = Test-GitDirty -Root $RepoRoot -Paths $repoPaths
+if ($dirtyLines.Count -gt 0) {
+    Write-Host '仓库目标路径存在未提交改动，请先提交或清理后再导出：' -ForegroundColor Red
+    foreach ($line in $dirtyLines) {
+        Write-Host ("  {0}" -f $line) -ForegroundColor Red
+    }
+    exit 1
 }
 
 # ---------- 执行导出 ----------
