@@ -76,14 +76,18 @@ function Sync-Directory {
     }
 
     # 尝试原子替换：旧目录改名为备份 → 临时目录改名为正式目标
+    $destinationExists = Test-Path -LiteralPath $Destination
     $renamed = $false
-    if (Test-Path -LiteralPath $Destination) {
+    if ($destinationExists) {
         if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
         try {
             Rename-Item -LiteralPath $Destination -NewName ".sync-backup-$name"
             $renamed = $true
         } catch {
-            # 目录被占用无法重命名（比如应用正在运行），回退到直接覆写
+            if (Test-Path -LiteralPath $staging) {
+                Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            throw "目标目录无法改名，可能正在被应用占用。请关闭相关应用后重试: $Destination。原始错误: $($_.Exception.Message)"
         }
     }
 
@@ -103,10 +107,7 @@ function Sync-Directory {
             Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue
         }
     } else {
-        # 回退路径：直接删除旧内容再复制（目录被占用时的兜底）
-        if (Test-Path -LiteralPath $Destination) {
-            Remove-Item -LiteralPath $Destination -Recurse -Force
-        }
+        # 目标目录不存在时，直接把临时目录改名为正式目标
         Rename-Item -LiteralPath $staging -NewName $name
     }
 
