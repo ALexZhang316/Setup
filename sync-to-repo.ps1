@@ -18,7 +18,7 @@ if ([string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
     exit 1
 }
 
-if (-not (Test-Path $RepoRoot)) {
+if (-not (Test-Path -LiteralPath $RepoRoot)) {
     Write-Host ("仓库根目录不存在: {0}" -f $RepoRoot) -ForegroundColor Red
     exit 1
 }
@@ -27,10 +27,10 @@ if (-not (Test-Path $RepoRoot)) {
 
 function Get-ClaudeDesktopPath {
     $store = "$env:LOCALAPPDATA\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude"
-    if (Test-Path $store) { return $store }
+    if (Test-Path -LiteralPath $store) { return $store }
 
     $roaming = "$env:APPDATA\Claude"
-    if (Test-Path $roaming) { return $roaming }
+    if (Test-Path -LiteralPath $roaming) { return $roaming }
 
     $wild = Get-Item "$env:LOCALAPPDATA\Packages\Claude_*\LocalCache\Roaming\Claude" -ErrorAction SilentlyContinue |
         Select-Object -First 1
@@ -68,17 +68,17 @@ function Sync-Directory {
     $staging = Join-Path $parent (".sync-staging-$name")
     $backup  = Join-Path $parent (".sync-backup-$name")
 
-    if (Test-Path $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
+    if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
     Copy-Item -LiteralPath $Source -Destination $staging -Recurse -Force
 
-    if (-not (Test-Path $staging)) {
+    if (-not (Test-Path -LiteralPath $staging)) {
         throw "复制到临时目录失败: $staging"
     }
 
     # 尝试原子替换：旧目录改名为备份 → 临时目录改名为正式目标
     $renamed = $false
-    if (Test-Path $Destination) {
-        if (Test-Path $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
+    if (Test-Path -LiteralPath $Destination) {
+        if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
         try {
             Rename-Item -LiteralPath $Destination -NewName ".sync-backup-$name"
             $renamed = $true
@@ -93,25 +93,25 @@ function Sync-Directory {
             Rename-Item -LiteralPath $staging -NewName $name
         } catch {
             # 重命名失败 → 回滚
-            if (Test-Path $backup) {
+            if (Test-Path -LiteralPath $backup) {
                 Rename-Item -LiteralPath $backup -NewName $name -ErrorAction SilentlyContinue
             }
             throw "目录替换失败，已回滚: $_"
         }
         # 替换成功，删除备份
-        if (Test-Path $backup) {
+        if (Test-Path -LiteralPath $backup) {
             Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue
         }
     } else {
         # 回退路径：直接删除旧内容再复制（目录被占用时的兜底）
-        if (Test-Path $Destination) {
+        if (Test-Path -LiteralPath $Destination) {
             Remove-Item -LiteralPath $Destination -Recurse -Force
         }
         Rename-Item -LiteralPath $staging -NewName $name
     }
 
     # 清理残留的临时目录
-    if (Test-Path $staging) {
+    if (Test-Path -LiteralPath $staging) {
         Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
@@ -158,7 +158,7 @@ foreach ($m in $mappings) {
     $src = $m.Local
     $dst = Join-Path $RepoRoot $m.Repo
 
-    if (-not (Test-Path $src)) {
+    if (-not (Test-Path -LiteralPath $src)) {
         Write-Host ("[跳过] 本机不存在: {0}" -f $src) -ForegroundColor Yellow
         $skipped++
         continue
@@ -166,7 +166,7 @@ foreach ($m in $mappings) {
 
     # 确保仓库中的目标父目录存在
     $parentDir = Split-Path -Parent $dst
-    if (-not (Test-Path $parentDir)) {
+    if (-not (Test-Path -LiteralPath $parentDir)) {
         New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
     }
 

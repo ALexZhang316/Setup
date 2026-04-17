@@ -5,10 +5,11 @@
     "launchPreviewPersistSession": true,
     "coworkScheduledTasksEnabled": true,
     "ccdScheduledTasksEnabled": true,
-    "sidebarMode": "code",
+    "sidebarMode": "epitaxy",
     "bypassPermissionsModeEnabled": true,
     "dockBounceEnabled": true,
     "coworkWebSearchEnabled": true,
-    "keepAwakeEnabled": false
+    "keepAwakeEnabled": false,
+    "floatingAtollActive": true
   }
 }

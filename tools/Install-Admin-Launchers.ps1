@@ -3,8 +3,7 @@
 # 需要管理员权限，脚本会自动请求提权
 
 param(
-    [string]$RepoRoot,
-    [switch]$Elevated
+    [string]$RepoRoot
 )
 
 $ErrorActionPreference = 'Stop'
@@ -22,7 +21,7 @@ function Test-IsAdmin {
 
 if (-not (Test-IsAdmin)) {
     $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $elevateArgs = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -RepoRoot "{1}" -Elevated' -f $PSCommandPath, $RepoRoot
+    $elevateArgs = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -RepoRoot "{1}"' -f $PSCommandPath, $RepoRoot
     try {
         $proc = Start-Process -FilePath $psExe -Verb RunAs -ArgumentList $elevateArgs -Wait -PassThru
         exit $proc.ExitCode
@@ -43,7 +42,7 @@ function Find-AppExe {
         if ($pkg) {
             foreach ($exe in $ExeNames) {
                 $path = Join-Path $pkg.InstallLocation "app\$exe"
-                if (Test-Path $path) { return $path }
+                if (Test-Path -LiteralPath $path) { return $path }
             }
         }
     }
@@ -60,7 +59,7 @@ function Find-AppExe {
     foreach ($base in $searchBases) {
         foreach ($exe in $ExeNames) {
             $path = Join-Path $base "$AppName\$exe"
-            if (Test-Path $path) { return $path }
+            if (Test-Path -LiteralPath $path) { return $path }
         }
     }
 
@@ -93,7 +92,7 @@ foreach ($pattern in $app.Packages) {
     if ($pkg) {
         foreach ($exe in $app.Exes) {
             $path = Join-Path $pkg.InstallLocation "app\$exe"
-            if (Test-Path $path) { Start-Process $path; return }
+            if (Test-Path -LiteralPath $path) { Start-Process $path; return }
         }
     }
 }
@@ -110,7 +109,7 @@ if (${env:ProgramFiles(x86)}) { $searchBases += ${env:ProgramFiles(x86)} }
 foreach ($base in $searchBases) {
     foreach ($exe in $app.Exes) {
         $path = Join-Path $base "$name\$exe"
-        if (Test-Path $path) { Start-Process $path; return }
+        if (Test-Path -LiteralPath $path) { Start-Process $path; return }
     }
 }
 
@@ -118,7 +117,7 @@ throw "找不到 $AppId 的可执行文件。"
 '@
 
     $dir = Split-Path -Parent $Path
-    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     Set-Content -LiteralPath $Path -Value $content -Encoding UTF8
 }
 

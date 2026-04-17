@@ -3,8 +3,7 @@
 # 需要管理员权限（计划任务以最高权限运行），脚本会自动请求提权
 
 param(
-    [string]$RepoRoot,
-    [switch]$Elevated
+    [string]$RepoRoot
 )
 
 $ErrorActionPreference = 'Stop'
@@ -22,7 +21,7 @@ function Test-IsAdmin {
 
 if (-not (Test-IsAdmin)) {
     $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $elevateArgs = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -RepoRoot "{1}" -Elevated' -f $PSCommandPath, $RepoRoot
+    $elevateArgs = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -RepoRoot "{1}"' -f $PSCommandPath, $RepoRoot
     try {
         $proc = Start-Process -FilePath $psExe -Verb RunAs -ArgumentList $elevateArgs -Wait -PassThru
         exit $proc.ExitCode
@@ -42,7 +41,7 @@ function Find-AutoHotkey {
         'C:\Program Files (x86)\AutoHotkey\v2\AutoHotkey.exe'
     )
     foreach ($c in $candidates) {
-        if (Test-Path $c) { return $c }
+        if (Test-Path -LiteralPath $c) { return $c }
     }
     $cmd = Get-Command AutoHotkey64.exe, AutoHotkey.exe -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($cmd) { return $cmd.Source }
@@ -133,7 +132,7 @@ try {
     Write-Host ("  AutoHotkey -> {0}" -f $ahkExe)
 
     # 写入 AHK 脚本
-    if (-not (Test-Path $remapRoot)) { New-Item -ItemType Directory -Path $remapRoot -Force | Out-Null }
+    if (-not (Test-Path -LiteralPath $remapRoot)) { New-Item -ItemType Directory -Path $remapRoot -Force | Out-Null }
     Set-Content -LiteralPath $scriptPath -Value $ahkContent -Encoding UTF8
     Write-Host ("  脚本 -> {0}" -f $scriptPath)
 
