@@ -11,9 +11,6 @@ personality = "pragmatic"
 [features]
 js_repl = true
 
-[windows]
-sandbox = "elevated"
-
 [plugins."github@openai-curated"]
 enabled = true
 
