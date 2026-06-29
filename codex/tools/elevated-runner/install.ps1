@@ -21,6 +21,9 @@ $LogsDir = Join-Path $RunnerRoot 'logs'
 $DoneDir = Join-Path $RunnerRoot 'done'
 $InstalledRunnerPath = Join-Path $RunnerRoot 'runner.ps1'
 $TriggerCmdPath = Join-Path $RunnerRoot 'Run-Elevated-Runner.cmd'
+$LegacyRunnerPaths = @(
+    (Join-Path $RunnerRoot 'Elevated-Runner.ps1')
+)
 
 function Test-IsAdmin {
     $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -50,6 +53,12 @@ function Ensure-Directory {
 
 foreach ($dir in @($RunnerRoot, $QueueDir, $RunningDir, $LogsDir, $DoneDir)) {
     Ensure-Directory -Path $dir
+}
+
+foreach ($legacyRunnerPath in $LegacyRunnerPaths) {
+    if (Test-Path -LiteralPath $legacyRunnerPath) {
+        Remove-Item -LiteralPath $legacyRunnerPath -Force
+    }
 }
 
 $sourceRunnerPath = Join-Path $RepoRoot 'codex\tools\elevated-runner\runner.ps1'

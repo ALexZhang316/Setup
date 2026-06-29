@@ -29,6 +29,22 @@ foreach ($dir in @($QueueDir, $LogsDir, $DoneDir)) {
     }
 }
 
+function Get-JobExitCode {
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $null
+    }
+
+    $logText = Get-Content -LiteralPath $Path -Raw
+    $match = [regex]::Match($logText, '(?m)^ExitCode=(-?\d+)\s*$')
+    if ($match.Success) {
+        return [int]$match.Groups[1].Value
+    }
+
+    return $null
+}
+
 if ($ScriptPath) {
     $resolvedScriptPath = (Resolve-Path -LiteralPath $ScriptPath).Path
     $scriptContent = Get-Content -LiteralPath $resolvedScriptPath -Raw
@@ -78,9 +94,13 @@ if (-not $Wait) {
 }
 
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+$exitCode = $null
 while ((Get-Date) -lt $deadline) {
     if (Test-Path -LiteralPath $donePath) {
-        break
+        $exitCode = Get-JobExitCode -Path $logPath
+        if ($null -ne $exitCode) {
+            break
+        }
     }
 
     Start-Sleep -Milliseconds 500
@@ -92,19 +112,10 @@ if (-not (Test-Path -LiteralPath $donePath)) {
     exit 124
 }
 
-$exitCode = 1
-if (Test-Path -LiteralPath $logPath) {
-    $logText = Get-Content -LiteralPath $logPath -Raw
-    $match = [regex]::Match($logText, '(?m)^ExitCode=(-?\d+)\s*$')
-    if ($match.Success) {
-        $exitCode = [int]$match.Groups[1].Value
-    }
-    else {
-        Write-Host 'Job completed, but no ExitCode line was found in the log.'
-    }
-}
-else {
-    Write-Host 'Job completed, but the log file was not found.'
+if ($null -eq $exitCode) {
+    Write-Host ('Timed out waiting for job exit code after {0} seconds.' -f $TimeoutSeconds)
+    Write-Host ('Log: {0}' -f $logPath)
+    exit 124
 }
 
 Write-Host ('Job completed: {0}' -f $jobId)

@@ -227,18 +227,18 @@ foreach ($jobFile in $jobs) {
     }
     finally {
         $endedAt = Get-Date
+        Add-Text -Path $logPath -Text ('EndTime={0:o}' -f $endedAt)
+        Add-Text -Path $logPath -Text ('DurationSeconds={0:n3}' -f (($endedAt - $startedAt).TotalSeconds))
+        Add-Text -Path $logPath -Text ('ExitCode={0}' -f $exitCode)
+
         try {
             $donePath = Move-ToDone -RunningPath $runningPath -JobId $jobId
+            Add-Text -Path $logPath -Text ('DoneFile={0}' -f $donePath)
         }
         catch {
             Add-Text -Path $logPath -Text ('ERROR moving job to done: {0}' -f $_.Exception.ToString())
             $exitCode = 1
         }
-
-        Add-Text -Path $logPath -Text ('EndTime={0:o}' -f $endedAt)
-        Add-Text -Path $logPath -Text ('DurationSeconds={0:n3}' -f (($endedAt - $startedAt).TotalSeconds))
-        Add-Text -Path $logPath -Text ('DoneFile={0}' -f $donePath)
-        Add-Text -Path $logPath -Text ('ExitCode={0}' -f $exitCode)
     }
 
     if ($exitCode -ne 0) {
