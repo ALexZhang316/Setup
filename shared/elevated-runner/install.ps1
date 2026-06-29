@@ -13,8 +13,8 @@ else {
     $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
 }
 
-$TaskName = 'Codex Elevated Runner'
-$RunnerRoot = Join-Path $env:LOCALAPPDATA 'CodexElevatedRunner'
+$TaskName = 'Setup Elevated Runner'
+$RunnerRoot = Join-Path $env:LOCALAPPDATA 'SetupElevatedRunner'
 $QueueDir = Join-Path $RunnerRoot 'queue'
 $RunningDir = Join-Path $RunnerRoot 'running'
 $LogsDir = Join-Path $RunnerRoot 'logs'
@@ -61,7 +61,7 @@ foreach ($legacyRunnerPath in $LegacyRunnerPaths) {
     }
 }
 
-$sourceRunnerPath = Join-Path $RepoRoot 'codex\tools\elevated-runner\runner.ps1'
+$sourceRunnerPath = Join-Path $RepoRoot 'shared\elevated-runner\runner.ps1'
 if (-not (Test-Path -LiteralPath $sourceRunnerPath)) {
     throw ('Runner script not found: {0}' -f $sourceRunnerPath)
 }
@@ -86,7 +86,7 @@ Register-ScheduledTask -TaskName $TaskName -Action $action -Principal $principal
 
 $registeredTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction Stop
 
-Write-Host 'Codex elevated runner installed.'
+Write-Host 'Setup elevated runner installed.'
 Write-Host ('  TaskName: {0}' -f $TaskName)
 Write-Host ('  TaskState: {0}' -f $registeredTask.State)
 Write-Host ('  RunnerRoot: {0}' -f $RunnerRoot)
@@ -96,6 +96,6 @@ Write-Host ('  DoneDir: {0}' -f $DoneDir)
 Write-Host ('  RunnerScript: {0}' -f $InstalledRunnerPath)
 Write-Host ('  TriggerCmd: {0}' -f $TriggerCmdPath)
 Write-Host ''
-Write-Host 'Usage from a medium-token Codex shell:'
+Write-Host 'Usage from a normal agent shell:'
 Write-Host ('  schtasks.exe /run /tn "{0}"' -f $TaskName)
-Write-Host '  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\codex\tools\elevated-runner\new-job.ps1 -Command "net session" -Wait'
+Write-Host '  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\shared\elevated-runner\new-job.ps1 -Command "net session" -Wait'

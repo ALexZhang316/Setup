@@ -2,7 +2,7 @@
 
 $ErrorActionPreference = 'Stop'
 
-$RunnerRoot = Join-Path $env:LOCALAPPDATA 'CodexElevatedRunner'
+$RunnerRoot = Join-Path $env:LOCALAPPDATA 'SetupElevatedRunner'
 $QueueDir = Join-Path $RunnerRoot 'queue'
 $RunningDir = Join-Path $RunnerRoot 'running'
 $LogsDir = Join-Path $RunnerRoot 'logs'
