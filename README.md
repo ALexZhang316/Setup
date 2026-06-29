@@ -1,132 +1,121 @@
 # Setup
 
-Windows AI 开发环境的配置备份与恢复仓库。
+Windows AI development configuration backup and restore repository.
 
-用 GitHub 保存配置快照，用脚本在机器之间同步 Codex、Claude Code、Claude Desktop 的设置。
+This repository manages only two product profiles:
 
-## 目录结构
-
-```
-profiles/
-  claude-code/        ~/.claude/ 的快照（CLAUDE.md, settings.json）
-  claude-desktop/     Claude Desktop 的快照（偏好设置, 扩展清单）
-  codex/              ~/.codex/ 的快照（AGENTS.md, config.toml, skills/）
-tools/
-  Install-Elevated-Runner.ps1    管理员命令执行器安装（可选）
-  Elevated-Runner.ps1            管理员命令执行器（计划任务运行）
-  New-Elevated-Job.ps1           创建管理员命令 job
-  Install-Chat-Enter-Newline.ps1 聊天热键映射（可选）
-```
-
-## 脚本
-
-| 脚本 | 作用 |
-|------|------|
-| `还原配置.cmd` | 把仓库快照还原到本机 |
-| `备份配置.cmd` | 把本机当前配置导出回仓库 |
-| `安装管理员执行器.cmd` | 创建 Codex Elevated Runner 计划任务 |
-| `tools\New-Elevated-Job.ps1` | 从普通 Codex shell 提交管理员命令 |
-| `安装聊天热键.cmd` | 安装聊天热键：Enter 换行，Ctrl+Enter 发送 |
-
-## 新电脑首次使用
-
-### 1. 安装基础软件
-
-至少先安装：
-
-- Git
 - Codex
-- Claude
+- Claude Code
 
-### 2. 各启动一次后退出
+## Structure
 
-应用首次启动时会创建用户目录。未启动过的话，同步脚本没有目标可写。
-
-### 3. 克隆仓库
-
-```powershell
-git clone <你的仓库地址> D:\Setup
-cd D:\Setup
+```text
+codex/
+  profile/                    Snapshot for %USERPROFILE%\.codex
+  restore.ps1                 Restore Codex profile
+  backup.ps1                  Export Codex profile
+  tools/elevated-runner/       Codex elevated command runner
+claudecode/
+  profile/                    Snapshot for %USERPROFILE%\.claude
+  restore.ps1                 Restore Claude Code profile
+  backup.ps1                  Export Claude Code profile
+scripts/
+  restore-all.ps1             Restore Codex, then Claude Code
+  backup-all.ps1              Export Codex, then Claude Code
+shared/
+  Sync-Core.psm1              Shared sync helpers
+  hotkey/install.ps1          Chat hotkey installer
 ```
 
-### 4. 运行同步脚本
+## Entrypoints
+
+| Command | Purpose |
+| --- | --- |
+| `restore-all.cmd` | Restore Codex, then Claude Code |
+| `backup-all.cmd` | Export Codex, then Claude Code |
+| `codex\restore.cmd` | Restore only Codex |
+| `codex\backup.cmd` | Export only Codex |
+| `claudecode\restore.cmd` | Restore only Claude Code |
+| `claudecode\backup.cmd` | Export only Claude Code |
+| `hotkey.cmd` | Install Enter newline / Ctrl+Enter send remap |
+| `elevated-runner.cmd` | Install the Codex elevated command runner |
+
+All sync PowerShell scripts support `-Preview`:
 
 ```powershell
-.\还原配置.cmd
+.\scripts\restore-all.ps1 -Preview
+.\codex\backup.ps1 -Preview
+.\claudecode\restore.ps1 -Preview
 ```
 
-脚本会把仓库中的配置文件复制到本机对应位置。未检测到的应用会自动跳过。
+Preview mode prints the planned source and destination paths without writing files.
 
-### 5. 按需运行可选工具
+## Path Mapping
+
+| Repository path | Local path |
+| --- | --- |
+| `codex\profile\AGENTS.md` | `%USERPROFILE%\.codex\AGENTS.md` |
+| `codex\profile\config.toml` | `%USERPROFILE%\.codex\config.toml` |
+| `codex\profile\skills\` | `%USERPROFILE%\.codex\skills\` |
+| `claudecode\profile\CLAUDE.md` | `%USERPROFILE%\.claude\CLAUDE.md` |
+| `claudecode\profile\settings.json` | `%USERPROFILE%\.claude\settings.json` |
+
+## First Machine Setup
+
+1. Install Git, Codex, and Claude Code.
+2. Launch Codex and Claude Code once so their user directories exist.
+3. Clone this repository to `D:\Setup`.
+4. Run `restore-all.cmd`.
+5. Restart Codex and Claude Code.
+
+## Daily Sync
+
+Export local changes:
 
 ```powershell
-.\安装管理员执行器.cmd      # 需要 UAC
-.\安装聊天热键.cmd          # 需要 AutoHotkey v2
+.\backup-all.cmd
+git status --short
+git add .
+git commit -m "Update setup profiles"
+git push
 ```
 
-### 6. 重启应用
-
-配置生效需要重启 Codex / Claude / Claude Desktop。
-
-## 日常同步
-
-1. 在本机修改实际配置
-2. 运行 `备份配置.cmd` 导出到仓库
-3. `git add` / `git commit` / `git push`
-4. 在其他机器 `git pull` 后运行 `还原配置.cmd`
-
-## 路径映射
-
-| 仓库路径 | 本机路径 |
-|----------|---------|
-| `profiles/claude-code/CLAUDE.md` | `~/.claude/CLAUDE.md` |
-| `profiles/claude-code/settings.json` | `~/.claude/settings.json` |
-| `profiles/claude-desktop/claude_desktop_config.json` | Claude Desktop 配置目录 |
-| `profiles/claude-desktop/extensions-installations.json` | Claude Desktop 配置目录 |
-| `profiles/codex/AGENTS.md` | `~/.codex/AGENTS.md` |
-| `profiles/codex/config.toml` | `~/.codex/config.toml` |
-| `profiles/codex/skills/` | `~/.codex/skills/` |
-
-Claude Desktop 配置目录会自动检测：Windows Store 安装 或 传统安装路径。
-
-## 常见问题
-
-### 脚本执行了但没变化
-
-应用没完全退出。关掉后重新运行脚本，再重启应用。
-
-### 聊天热键没生效
-
-检查 AutoHotkey v2 是否安装成功。脚本会尝试通过 winget 自动安装。
-
-### 管理员命令执行器
-
-新版 Windows Codex GUI 不保证 agent shell 继承管理员 token，管理员命令统一走 Codex Elevated Runner。
-
-用于安装软件、修改系统目录、写注册表、管理服务，以及执行需要 High Mandatory Level 的命令。它会安装一个最高权限计划任务 `Codex Elevated Runner`，Codex agent 只需要写入 job 并触发计划任务。
-
-安装：
+Restore on another machine:
 
 ```powershell
-.\安装管理员执行器.cmd
-# 或
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\Install-Elevated-Runner.ps1
+git pull
+.\restore-all.cmd
 ```
 
-在 Codex 中提交管理员命令：
+## Elevated Runner
+
+Install:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\New-Elevated-Job.ps1 -Command "net session; whoami /groups" -Wait
+.\elevated-runner.cmd
 ```
 
-也可以提交脚本文件：
+Submit an elevated command from a normal Codex shell:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\New-Elevated-Job.ps1 -ScriptPath .\some-admin-task.ps1 -Wait
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\codex\tools\elevated-runner\new-job.ps1 -Command "net session" -Wait
 ```
 
-日志目录：
+Logs are written under:
 
-```powershell
+```text
 %LOCALAPPDATA%\CodexElevatedRunner\logs
 ```
+
+## Hotkey
+
+Install:
+
+```powershell
+.\hotkey.cmd
+```
+
+The remap applies to chat windows:
+
+- `Enter` inserts a newline.
+- `Ctrl+Enter` sends the message.

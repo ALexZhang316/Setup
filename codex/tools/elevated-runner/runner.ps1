@@ -1,4 +1,4 @@
-# Elevated-Runner.ps1 - execute queued jobs with an administrator token.
+# runner.ps1 - execute queued jobs with an administrator token.
 
 $ErrorActionPreference = 'Stop'
 
@@ -154,7 +154,7 @@ foreach ($dir in @($RunnerRoot, $QueueDir, $RunningDir, $LogsDir, $DoneDir)) {
 }
 
 if (-not (Test-IsAdmin)) {
-    Write-GeneralLog 'ERROR: Elevated-Runner.ps1 is not running with an administrator token.'
+    Write-GeneralLog 'ERROR: runner.ps1 is not running with an administrator token.'
     exit 1
 }
 

@@ -1,4 +1,4 @@
-# New-Elevated-Job.ps1 - queue an administrator job and trigger Codex Elevated Runner.
+# new-job.ps1 - queue an administrator job and trigger Codex Elevated Runner.
 
 param(
     [string]$ScriptPath,
@@ -20,7 +20,7 @@ if ([string]::IsNullOrWhiteSpace($ScriptPath) -eq [string]::IsNullOrWhiteSpace($
 }
 
 if (-not (Test-Path -LiteralPath $RunnerRoot)) {
-    throw ('Runner root does not exist. Install it first: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\Install-Elevated-Runner.ps1')
+    throw ('Runner root does not exist. Install it first: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\codex\tools\elevated-runner\install.ps1')
 }
 
 foreach ($dir in @($QueueDir, $LogsDir, $DoneDir)) {

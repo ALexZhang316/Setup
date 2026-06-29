@@ -1,4 +1,4 @@
-# Install-Elevated-Runner.ps1 - install a scheduled-task based elevated command runner.
+# install.ps1 - install a scheduled-task based elevated command runner.
 
 param(
     [string]$RepoRoot
@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if (-not $RepoRoot) {
-    $RepoRoot = Split-Path -Parent $PSScriptRoot
+    $RepoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 }
 else {
     $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
@@ -19,7 +19,7 @@ $QueueDir = Join-Path $RunnerRoot 'queue'
 $RunningDir = Join-Path $RunnerRoot 'running'
 $LogsDir = Join-Path $RunnerRoot 'logs'
 $DoneDir = Join-Path $RunnerRoot 'done'
-$InstalledRunnerPath = Join-Path $RunnerRoot 'Elevated-Runner.ps1'
+$InstalledRunnerPath = Join-Path $RunnerRoot 'runner.ps1'
 $TriggerCmdPath = Join-Path $RunnerRoot 'Run-Elevated-Runner.cmd'
 
 function Test-IsAdmin {
@@ -52,7 +52,7 @@ foreach ($dir in @($RunnerRoot, $QueueDir, $RunningDir, $LogsDir, $DoneDir)) {
     Ensure-Directory -Path $dir
 }
 
-$sourceRunnerPath = Join-Path $RepoRoot 'tools\Elevated-Runner.ps1'
+$sourceRunnerPath = Join-Path $RepoRoot 'codex\tools\elevated-runner\runner.ps1'
 if (-not (Test-Path -LiteralPath $sourceRunnerPath)) {
     throw ('Runner script not found: {0}' -f $sourceRunnerPath)
 }
@@ -89,4 +89,4 @@ Write-Host ('  TriggerCmd: {0}' -f $TriggerCmdPath)
 Write-Host ''
 Write-Host 'Usage from a medium-token Codex shell:'
 Write-Host ('  schtasks.exe /run /tn "{0}"' -f $TaskName)
-Write-Host '  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\New-Elevated-Job.ps1 -Command "net session" -Wait'
+Write-Host '  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\codex\tools\elevated-runner\new-job.ps1 -Command "net session" -Wait'

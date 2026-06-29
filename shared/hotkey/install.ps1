@@ -1,6 +1,6 @@
-﻿# Install-Chat-Enter-Newline.ps1 — 安装聊天窗口键盘映射
-# Enter = 换行，Ctrl+Enter = 发送（仅在 Codex / Claude 窗口生效）
-# 需要管理员权限（计划任务以最高权限运行），脚本会自动请求提权
+# install.ps1 - install chat-window keyboard remapping.
+# Enter = newline, Ctrl+Enter = send. Applies to Codex and Claude Code windows.
+# Requires administrator rights because the scheduled task runs elevated.
 
 param(
     [string]$RepoRoot
@@ -9,10 +9,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if (-not $RepoRoot) {
-    $RepoRoot = Split-Path -Parent $PSScriptRoot
+    $RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 }
-
-# ---------- 提权 ----------
 
 function Test-IsAdmin {
     $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -25,13 +23,12 @@ if (-not (Test-IsAdmin)) {
     try {
         $proc = Start-Process -FilePath $psExe -Verb RunAs -ArgumentList $elevateArgs -Wait -PassThru
         exit $proc.ExitCode
-    } catch {
-        Write-Host 'UAC 提权被拒绝或失败。此脚本需要管理员权限。' -ForegroundColor Red
+    }
+    catch {
+        Write-Host 'UAC elevation was cancelled or failed. Administrator rights are required.' -ForegroundColor Red
         exit 1
     }
 }
-
-# ---------- 查找 AutoHotkey v2 ----------
 
 function Find-AutoHotkey {
     $candidates = @(
@@ -40,24 +37,32 @@ function Find-AutoHotkey {
         'C:\Program Files (x86)\AutoHotkey\v2\AutoHotkey64.exe',
         'C:\Program Files (x86)\AutoHotkey\v2\AutoHotkey.exe'
     )
-    foreach ($c in $candidates) {
-        if (Test-Path -LiteralPath $c) { return $c }
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
     }
-    $cmd = Get-Command AutoHotkey64.exe, AutoHotkey.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($cmd) { return $cmd.Source }
+
+    $command = Get-Command AutoHotkey64.exe, AutoHotkey.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($command) {
+        return $command.Source
+    }
+
     return $null
 }
 
 function Ensure-AutoHotkey {
     $exe = Find-AutoHotkey
-    if ($exe) { return $exe }
+    if ($exe) {
+        return $exe
+    }
 
     $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
     if (-not $winget) {
-        throw '未检测到 AutoHotkey v2，且系统中没有 winget。请先手动安装 AutoHotkey v2。'
+        throw 'AutoHotkey v2 was not found, and winget is not available. Install AutoHotkey v2 manually.'
     }
 
-    Write-Host '未检测到 AutoHotkey v2，通过 winget 自动安装...'
+    Write-Host 'AutoHotkey v2 was not found. Installing with winget...'
     $proc = Start-Process -FilePath $winget.Source -ArgumentList @(
         'install', '--id', 'AutoHotkey.AutoHotkey', '-e',
         '--accept-package-agreements', '--accept-source-agreements',
@@ -66,18 +71,19 @@ function Ensure-AutoHotkey {
 
     if (-not $proc.WaitForExit(300000)) {
         Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-        throw 'winget 安装 AutoHotkey 超时（5 分钟）。'
+        throw 'winget AutoHotkey install timed out after 5 minutes.'
     }
     if ($proc.ExitCode -ne 0) {
-        throw ("winget 安装失败，退出码 {0}。" -f $proc.ExitCode)
+        throw ('winget AutoHotkey install failed with exit code {0}.' -f $proc.ExitCode)
     }
 
     $exe = Find-AutoHotkey
-    if (-not $exe) { throw '安装完成但仍找不到 AutoHotkey v2 可执行文件。' }
+    if (-not $exe) {
+        throw 'AutoHotkey install completed, but no AutoHotkey v2 executable was found.'
+    }
+
     return $exe
 }
-
-# ---------- AHK 脚本内容 ----------
 
 $ahkContent = @'
 #Requires AutoHotkey v2.0
@@ -120,49 +126,46 @@ $^NumpadEnter::
 #HotIf
 '@
 
-# ---------- 主流程 ----------
-
 try {
-    $remapRoot  = Join-Path $env:LOCALAPPDATA 'DesktopAIKeyRemap'
+    $remapRoot = Join-Path $env:LOCALAPPDATA 'DesktopAIKeyRemap'
     $scriptPath = Join-Path $remapRoot 'ChatEnterNewline.ahk'
-    $taskName   = 'Desktop AI Enter Newline Remap'
+    $taskName = 'Desktop AI Enter Newline Remap'
 
-    Write-Host '检查前置条件...'
+    Write-Host 'Checking prerequisites...'
     $ahkExe = Ensure-AutoHotkey
-    Write-Host ("  AutoHotkey -> {0}" -f $ahkExe)
+    Write-Host ('  AutoHotkey -> {0}' -f $ahkExe)
 
-    # 写入 AHK 脚本
-    if (-not (Test-Path -LiteralPath $remapRoot)) { New-Item -ItemType Directory -Path $remapRoot -Force | Out-Null }
+    if (-not (Test-Path -LiteralPath $remapRoot)) {
+        New-Item -ItemType Directory -Path $remapRoot -Force | Out-Null
+    }
     Set-Content -LiteralPath $scriptPath -Value $ahkContent -Encoding UTF8
-    Write-Host ("  脚本 -> {0}" -f $scriptPath)
+    Write-Host ('  Script -> {0}' -f $scriptPath)
 
-    # 停止已有的 AHK 进程（如果有）
     Get-Process -Name AutoHotkey*, AutoHotkey64* -ErrorAction SilentlyContinue |
-        Where-Object { $_.CommandLine -and $_.CommandLine -like "*ChatEnterNewline*" } |
+        Where-Object { $_.CommandLine -and $_.CommandLine -like '*ChatEnterNewline*' } |
         Stop-Process -Force -ErrorAction SilentlyContinue
 
-    # 清理旧版计划任务
-    foreach ($old in @('Codex Enter Newline Remap')) {
-        $t = Get-ScheduledTask -TaskName $old -ErrorAction SilentlyContinue
-        if ($t) { Unregister-ScheduledTask -TaskName $old -Confirm:$false }
+    foreach ($oldTaskName in @('Codex Enter Newline Remap')) {
+        $oldTask = Get-ScheduledTask -TaskName $oldTaskName -ErrorAction SilentlyContinue
+        if ($oldTask) {
+            Unregister-ScheduledTask -TaskName $oldTaskName -Confirm:$false
+        }
     }
 
-    # 注册计划任务（开机自启）
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-    $action    = New-ScheduledTaskAction -Execute $ahkExe -Argument ('"{0}"' -f $scriptPath)
-    $trigger   = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
+    $action = New-ScheduledTaskAction -Execute $ahkExe -Argument ('"{0}"' -f $scriptPath)
+    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
     $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Highest
-    $settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 
-    # 立即启动
     Start-Process -FilePath $ahkExe -ArgumentList ('"{0}"' -f $scriptPath)
 
     Write-Host ''
-    Write-Host '聊天热键安装完成。'
-    Write-Host '  Enter -> 换行'
-    Write-Host '  Ctrl+Enter -> 发送'
-    Write-Host ("  任务 -> {0}" -f $taskName)
+    Write-Host 'Chat hotkey install complete.'
+    Write-Host '  Enter -> newline'
+    Write-Host '  Ctrl+Enter -> send'
+    Write-Host ('  Task -> {0}' -f $taskName)
 }
 catch {
     Write-Host ''
