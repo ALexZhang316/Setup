@@ -14,13 +14,14 @@ $RunnerRoot = Join-Path $env:LOCALAPPDATA 'SetupElevatedRunner'
 $QueueDir = Join-Path $RunnerRoot 'queue'
 $LogsDir = Join-Path $RunnerRoot 'logs'
 $DoneDir = Join-Path $RunnerRoot 'done'
+$InstallScriptPath = Join-Path $PSScriptRoot 'install.ps1'
 
 if ([string]::IsNullOrWhiteSpace($ScriptPath) -eq [string]::IsNullOrWhiteSpace($Command)) {
     throw 'Specify exactly one of -ScriptPath or -Command.'
 }
 
 if (-not (Test-Path -LiteralPath $RunnerRoot)) {
-    throw ('Runner root does not exist. Install it first: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\shared\elevated-runner\install.ps1')
+    throw ('Runner root does not exist. Install it first: powershell.exe -NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $InstallScriptPath)
 }
 
 foreach ($dir in @($QueueDir, $LogsDir, $DoneDir)) {

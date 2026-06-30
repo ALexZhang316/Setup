@@ -1,0 +1,4 @@
+interface:
+  display_name: "Elevated Runner"
+  short_description: "Run approved Windows commands with elevation"
+  default_prompt: "Use $elevated-runner to run a Windows command that needs administrator rights."

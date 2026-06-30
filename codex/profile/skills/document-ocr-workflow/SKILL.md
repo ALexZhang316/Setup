@@ -1,11 +1,11 @@
 ---
-name: pdf-word-workflow
-description: Process PDF and Word document workflows with text-layer inspection, scanned-page OCR, text normalization, multi-file merging, reference-format transplantation, structured-record alignment, and structural or visual QA. Use for scanned or hybrid PDFs, PDF-to-DOCX recovery, DOCX cleanup and assembly, matching questions or other records to answers, preserving shared content blocks, applying formatting from an example Word file, or validating final PDF/DOCX deliverables.
+name: document-ocr-workflow
+description: Faithfully extract, OCR, transcribe, merge, format, and verify text from documents and images. Use when the user asks to 识别图片, 识别截图, 识别扫描件, 提取文字, 转写, 图片转 Word, image OCR, screenshot OCR, photo OCR, scanned or hybrid PDF OCR, PDF-to-DOCX recovery, DOCX cleanup and assembly, matching questions or records to answers, preserving shared content blocks, applying Word reference formatting, or validating final document deliverables.
 ---
 
-# PDF / Word Workflow
+# Document OCR Workflow
 
-Build the content model first, apply formatting second, and verify structure and rendering separately. Use the existing PDF and Documents skills for their native operations; use this skill to coordinate OCR, format donation, content alignment, and failure recovery.
+Build the content model first, apply formatting second, and verify structure and rendering separately. Use the existing PDF and Documents skills for their native operations; use this skill to coordinate OCR from PDFs or image files, format donation, content alignment, and failure recovery.
 
 ## Resolve Tools
 
@@ -19,9 +19,10 @@ Build the content model first, apply formatting second, and verify structure and
 
 1. List inputs, sizes, extensions, ordering, locks, and expected outputs.
 2. Run `scripts/pdf_inspect.py` for each PDF before selecting extraction or OCR.
-3. Inspect DOCX page settings, headers, footers, styles, representative paragraphs, tables, drawings, formulas, comments, and fields before editing.
-4. Record explicit restrictions such as text-only output, no page numbers, no images, no explanations, or exact source order.
-5. Establish a page-level or block-level manifest before transforming content.
+3. For standalone image inputs, record dimensions, file format, EXIF orientation, visual legibility, ordering, and whether the image is a full page, crop, figure, table, handwritten note, or mixed source.
+4. Inspect DOCX page settings, headers, footers, styles, representative paragraphs, tables, drawings, formulas, comments, and fields before editing.
+5. Record explicit restrictions such as text-only output, no page numbers, no images, no explanations, or exact source order.
+6. Establish a page-level, image-level, or block-level manifest before transforming content.
 
 ## Route PDF Pages
 
@@ -34,12 +35,30 @@ Classify each page independently:
 
 Read [references/scan-ocr.md](references/scan-ocr.md) whenever OCR, handwriting, low-confidence text, formulas, figures, or page-level skip reporting is involved.
 
+## Route Image Inputs
+
+Treat each image as a source page unless the user states it is a crop, figure, or supporting visual:
+
+- Preserve the original image file read-only and apply orientation or preprocessing only to temp copies.
+- Keep image provenance explicit: source file, input order, derived page or crop identifier, preprocessing, OCR engine, language, PSM, confidence, and uncertainty.
+- Use OCR directly for text-bearing images. Stage images in a temp directory and run `scripts/ocr_pages_tesseractjs.mjs` with `--input-dir`, or create a manifest with one record per image when filenames alone are not enough provenance.
+- Inspect non-text regions, handwriting, stamps, figures, tables, and captions visually before deciding whether to transcribe, mark uncertain, or skip.
+- Do not infer missing surrounding document text from a cropped image. Use an uncertainty marker or ask only if the missing context blocks the requested output.
+
+## Preserve Source Wording
+
+1. Treat extraction and OCR as transcription, not editing. Preserve original wording, abbreviations, word order, numeric values, units, and domain notation.
+2. Only make lossless cleanup that is visibly supported by the source: encoding repair, whitespace, line breaks, punctuation shape, option labels, and obvious OCR substitutions.
+3. Never replace source text with synonyms, expansions, summaries, or domain explanations unless the user explicitly requested translation, rewriting, or terminology standardization. Keep `COPD` as `COPD`, not `慢性阻塞性肺疾病`; keep `患者发热温度升至39°`, not `患者体温39°`.
+4. Keep `source_text` or `transcribed_text` separate from `normalized_key`. Use normalized text only for matching, sorting, or duplicate detection, never as the final delivered wording.
+5. If the correct reading cannot be proven from the source image or text layer, preserve the best reading and add an uncertainty marker instead of rewriting it.
+
 ## Build Logical Content
 
-1. Normalize encoding, whitespace, punctuation, option labels, line breaks, and obvious OCR substitutions without changing substantive meaning.
+1. Build normalized matching keys for encoding, whitespace, punctuation, option labels, line breaks, and visually proven OCR substitutions. Do not overwrite the transcribed source wording with these keys.
 2. Represent records as logical blocks rather than raw lines or paragraph numbers.
-3. Preserve provenance: source file, source page, original order, OCR confidence, uncertainty, and skipped non-text content.
-4. Match paired documents by stable identifiers and normalized content, then review unresolved records. Do not proceed merely because one regular expression produced equal counts.
+3. Preserve provenance: source file, source page or image identifier, original order, OCR confidence, uncertainty, and skipped non-text content.
+4. Match paired documents by stable identifiers and normalized matching keys, then review unresolved records. Do not proceed merely because one regular expression produced equal counts.
 5. Detect unnumbered records through document structure and content transitions.
 6. Keep shared stems, shared options, captions, or other dependent ranges as atomic groups during spacing changes, merging, and randomization.
 
@@ -69,13 +88,15 @@ Read [references/format-transplant.md](references/format-transplant.md) before c
 
 Run structural checks before visual checks:
 
-1. Confirm every source page or source record produced text, a deliberate empty result, or a documented skip marker.
+1. Confirm every source page, source image, or source record produced text, a deliberate empty result, or a documented skip marker.
 2. Run `scripts/docx_audit.py` with expectations for text-only output, markers, regex counts, headers, footers, page fields, formulas, or media.
 3. Validate record sequence and paired-document correspondence from the logical block model, including unnumbered records and shared groups.
-4. Render final PDFs to PNG with Poppler and inspect every page.
-5. Render final DOCX files with the Documents skill and inspect every PNG. If LibreOffice is unavailable on Windows, open the DOCX read-only through Word COM, inspect structural metrics, and state that PNG visual QA was unavailable.
-6. Treat warnings or stderr as diagnostic evidence, not the verdict. Judge completion from required artifacts, exit status, structural checks, and inspected renders.
-7. Remove temp files after the final checks.
+4. Inspect every source image used for OCR and every PDF page image produced during extraction or rendering.
+5. Render final PDFs to PNG with Poppler and inspect every page.
+6. Render final DOCX files with the Documents skill and inspect every PNG. If LibreOffice is unavailable on Windows, open the DOCX read-only through Word COM, inspect structural metrics, and state that PNG visual QA was unavailable.
+7. Treat warnings or stderr as diagnostic evidence, not the verdict. Judge completion from required artifacts, exit status, structural checks, and inspected renders.
+8. When OCR or cleanup changed text, spot-check against the source for semantic rewrites, especially abbreviations, medical terms, numeric values, units, and short phrases.
+9. Remove temp files after the final checks.
 
 ## Failure Playbook
 
@@ -88,12 +109,12 @@ Run structural checks before visual checks:
 
 ## Final Report
 
-Report the final artifact path, processed page/record counts, skipped non-text locations, unresolved or uncertain locations, applied format mode, and verification methods. Mention any unavailable visual QA explicitly. Do not expose temp renders or OCR caches unless requested.
+Report the final artifact path, processed page/image/record counts, skipped non-text locations, unresolved or uncertain locations, applied format mode, and verification methods. If the user did not request rewriting, state that source wording was preserved except for lossless OCR cleanup. Mention any unavailable visual QA explicitly. Do not expose temp renders or OCR caches unless requested.
 
 ## Script Index
 
 - `scripts/pdf_inspect.py`: classify PDF pages and inventory text layers and raster objects.
 - `scripts/pdf_extract_scan_pages.py`: extract or render page images and write a provenance manifest.
-- `scripts/ocr_pages_tesseractjs.mjs`: OCR page images with language, confidence, and PSM metadata.
+- `scripts/ocr_pages_tesseractjs.mjs`: OCR extracted page images or standalone image inputs with language, confidence, and PSM metadata.
 - `scripts/docx_format_tools.py`: importable OOXML-safe formatting and atomic-save helpers.
 - `scripts/docx_audit.py`: validate text-only and other structural DOCX requirements.

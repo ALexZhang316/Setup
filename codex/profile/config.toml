@@ -90,8 +90,14 @@ trust_level = "trusted"
 [projects.'c:\users\23642\documents\codex\2026-06-29\ni']
 trust_level = "trusted"
 
+[projects.'c:\users\23642\documents\codex\2026-06-29\ch']
+trust_level = "trusted"
+
+[projects.'c:\users\23642\documents\codex']
+trust_level = "trusted"
+
 [marketplaces.openai-bundled]
-last_updated = "2026-06-29T09:28:45Z"
+last_updated = "2026-06-30T13:06:56Z"
 source_type = "local"
 source = '\\?\C:\Users\23642\.codex\.tmp\bundled-marketplaces\openai-bundled'
 
@@ -111,6 +117,9 @@ conversationDetailMode = "STEPS_COMMANDS"
 hotkey-window-projectless-default-enabled = true
 show-context-window-usage = true
 keepRemoteControlAwakeWhilePluggedIn = true
+sansFontSize = 14
+codeFontSize = 13
+ambient-suggestions-enabled = true
 
 [desktop.appearanceLightChromeTheme]
 accent = "#0169cc"
@@ -146,15 +155,15 @@ NODE_REPL_NODE_MODULE_DIRS = 'C:\Users\23642\AppData\Local\OpenAI\Codex\runtimes
 NODE_REPL_NODE_PATH = 'C:\Users\23642\AppData\Local\OpenAI\Codex\runtimes\cua_node\1b23c930bdf84ed6\bin\node.exe'
 NODE_REPL_TRUSTED_CODE_PATHS = 'C:\Users\23642\.codex'
 CODEX_HOME = 'C:\Users\23642\.codex'
-NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "566be6ef352eb3de899adc56a9cd7b5e46c8f65b00e56b5630dd7a580e10cbea,a05cdd282c2717f076e11bc0e94b7b20e1fc4759dbe28440bd1c734953606a56"
+NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "566be6ef352eb3de899adc56a9cd7b5e46c8f65b00e56b5630dd7a580e10cbea,d5cbb8ec1ee520cba7943b1e1accb6b25acd9941ea4e2e9e4dbcf25ff9983a2d"
 BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
 NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER = "Control the in-app browser in conjunction with the Browser Plugin."
 NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative."
 BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod"
-BROWSER_USE_CODEX_APP_VERSION = "26.623.61825"
+BROWSER_USE_CODEX_APP_VERSION = "26.623.70822"
 SKY_CUA_NATIVE_PIPE = "1"
-SKY_CUA_NATIVE_PIPE_DIRECTORY = '\\.\pipe\codex-computer-use-a1a7dafe-8381-4a3a-8337-c8308c5dd24f'
-CODEX_CLI_PATH = 'C:\Users\23642\AppData\Local\OpenAI\Codex\bin\aec6b7c6fcdfb66a\codex.exe'
+SKY_CUA_NATIVE_PIPE_DIRECTORY = '\\.\pipe\codex-computer-use-299abdc0-027b-43f0-8286-e9f9f77a4492'
+CODEX_CLI_PATH = 'C:\Users\23642\AppData\Local\OpenAI\Codex\bin\d8dfab353c0001dc\codex.exe'
 
 [memories]
 generate_memories = true

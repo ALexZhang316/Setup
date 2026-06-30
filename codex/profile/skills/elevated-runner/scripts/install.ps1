@@ -1,16 +1,16 @@
 # install.ps1 - install a scheduled-task based elevated command runner.
 
 param(
-    [string]$RepoRoot
+    [string]$SkillRoot
 )
 
 $ErrorActionPreference = 'Stop'
 
-if (-not $RepoRoot) {
-    $RepoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
+if (-not $SkillRoot) {
+    $SkillRoot = Split-Path -Parent $PSScriptRoot
 }
 else {
-    $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
+    $SkillRoot = (Resolve-Path -LiteralPath $SkillRoot).Path
 }
 
 $TaskName = 'Setup Elevated Runner'
@@ -32,7 +32,7 @@ function Test-IsAdmin {
 
 if (-not (Test-IsAdmin)) {
     $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $elevateArgs = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -RepoRoot "{1}"' -f $PSCommandPath, $RepoRoot
+    $elevateArgs = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -SkillRoot "{1}"' -f $PSCommandPath, $SkillRoot
     try {
         $proc = Start-Process -FilePath $psExe -Verb RunAs -ArgumentList $elevateArgs -Wait -PassThru
         exit $proc.ExitCode
@@ -61,7 +61,7 @@ foreach ($legacyRunnerPath in $LegacyRunnerPaths) {
     }
 }
 
-$sourceRunnerPath = Join-Path $RepoRoot 'shared\elevated-runner\runner.ps1'
+$sourceRunnerPath = Join-Path $SkillRoot 'scripts\runner.ps1'
 if (-not (Test-Path -LiteralPath $sourceRunnerPath)) {
     throw ('Runner script not found: {0}' -f $sourceRunnerPath)
 }
@@ -98,4 +98,4 @@ Write-Host ('  TriggerCmd: {0}' -f $TriggerCmdPath)
 Write-Host ''
 Write-Host 'Usage from a normal agent shell:'
 Write-Host ('  schtasks.exe /run /tn "{0}"' -f $TaskName)
-Write-Host '  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\shared\elevated-runner\new-job.ps1 -Command "net session" -Wait'
+Write-Host ('  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "{0}" -Command "net session" -Wait' -f (Join-Path $SkillRoot 'scripts\new-job.ps1'))

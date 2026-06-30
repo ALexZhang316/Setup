@@ -7,9 +7,94 @@ import re
 import sys
 from pathlib import Path
 
-import yaml
-
 MAX_SKILL_NAME_LENGTH = 64
+
+
+class FrontmatterError(ValueError):
+    """Raised when a SKILL.md frontmatter block is not parseable."""
+
+
+def parse_scalar(value):
+    """Parse the simple scalar forms used by skill frontmatter."""
+    value = value.strip()
+    if not value:
+        return None
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        return value[1:-1]
+    if value in {"[]", "{}"}:
+        return [] if value == "[]" else {}
+    lowered = value.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    return value
+
+
+def collect_indented_block(lines, start_index):
+    """Collect a nested YAML-ish block without fully parsing its contents."""
+    collected = []
+    index = start_index
+    while index < len(lines):
+        line = lines[index]
+        if line.strip() and not line.startswith((" ", "\t")):
+            break
+        collected.append(line)
+        index += 1
+    return collected, index
+
+
+def parse_block_scalar(lines, start_index, style):
+    """Parse literal or folded block scalars for descriptions."""
+    block_lines, index = collect_indented_block(lines, start_index)
+    meaningful = [line for line in block_lines if line.strip()]
+    if not meaningful:
+        return "", index
+    indents = [len(line) - len(line.lstrip(" ")) for line in meaningful]
+    trim = min(indents)
+    text_lines = [line[trim:] if len(line) >= trim else "" for line in block_lines]
+    if style == ">":
+        text = " ".join(line.strip() for line in text_lines if line.strip())
+    else:
+        text = "\n".join(text_lines).strip("\n")
+    return text, index
+
+
+def parse_frontmatter(frontmatter_text):
+    """Parse the small YAML subset needed by quick skill validation."""
+    result = {}
+    lines = frontmatter_text.splitlines()
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            index += 1
+            continue
+        if line.startswith((" ", "\t")):
+            raise FrontmatterError(f"nested value without a top-level key: {stripped!r}")
+
+        match = re.match(r"^([A-Za-z0-9_-]+):(?:\s*(.*))?$", line)
+        if not match:
+            raise FrontmatterError(f"invalid frontmatter line: {line!r}")
+
+        key, raw_value = match.groups()
+        raw_value = "" if raw_value is None else raw_value
+        index += 1
+
+        if raw_value in {"|", ">"}:
+            result[key], index = parse_block_scalar(lines, index, raw_value)
+        elif raw_value == "":
+            block_lines, next_index = collect_indented_block(lines, index)
+            if any(block_line.strip() for block_line in block_lines):
+                result[key] = {}
+                index = next_index
+            else:
+                result[key] = None
+        else:
+            result[key] = parse_scalar(raw_value)
+
+    return result
 
 
 def validate_skill(skill_path):
@@ -20,21 +105,21 @@ def validate_skill(skill_path):
     if not skill_md.exists():
         return False, "SKILL.md not found"
 
-    content = skill_md.read_text()
+    content = skill_md.read_text(encoding="utf-8-sig")
     if not content.startswith("---"):
         return False, "No YAML frontmatter found"
 
-    match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
+    match = re.match(r"^---\r?\n(.*?)\r?\n---", content, re.DOTALL)
     if not match:
         return False, "Invalid frontmatter format"
 
     frontmatter_text = match.group(1)
 
     try:
-        frontmatter = yaml.safe_load(frontmatter_text)
+        frontmatter = parse_frontmatter(frontmatter_text)
         if not isinstance(frontmatter, dict):
             return False, "Frontmatter must be a YAML dictionary"
-    except yaml.YAMLError as e:
+    except FrontmatterError as e:
         return False, f"Invalid YAML in frontmatter: {e}"
 
     allowed_properties = {"name", "description", "license", "allowed-tools", "metadata"}

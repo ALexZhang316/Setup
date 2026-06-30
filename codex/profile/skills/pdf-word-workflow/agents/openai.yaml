@@ -1,4 +1,0 @@
-interface:
-  display_name: "PDF / Word Workflow"
-  short_description: "OCR, format transplant, merge, and verify PDF/Word files"
-  default_prompt: "Use $pdf-word-workflow to extract, normalize, format, merge, and verify these PDF or Word documents."

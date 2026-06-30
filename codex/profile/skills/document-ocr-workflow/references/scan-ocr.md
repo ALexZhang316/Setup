@@ -2,10 +2,10 @@
 
 ## Decision Order
 
-1. Inspect the PDF before OCR. Use an existing text layer when it is complete and ordered correctly.
+1. Inspect the PDF or standalone image before OCR. Use an existing PDF text layer when it is complete and ordered correctly.
 2. For scan pages, extract the embedded page image directly. This usually preserves more detail than rendering the PDF at an arbitrary DPI.
 3. Render with Poppler only when the page has no usable embedded raster or contains vector content that must be flattened.
-4. Run OCR per page and retain a manifest tying each result to its source file and one-based source page.
+4. Run OCR per page or source image and retain a manifest tying each result to its source file, one-based source page when present, or image identifier.
 
 ## Preprocessing
 
@@ -15,7 +15,7 @@ Apply only transformations that improve OCR without erasing evidence:
 - apply mild autocontrast;
 - apply light sharpening;
 - deskew only when the measured angle is credible;
-- keep the unmodified extracted image available in temp for comparison.
+- keep the unmodified extracted page image or standalone image available in temp for comparison.
 
 Do not mark scan shadows, paper edges, compression noise, or camera distortion as semantic non-text content.
 
@@ -36,8 +36,11 @@ On some Chinese Windows hosts, shell pipelines can display valid UTF-8 OCR text 
 ## Reading Order and Cleanup
 
 - Rebuild paragraphs, lists, questions, and options from geometry and labels rather than preserving OCR line breaks blindly.
-- Correct obvious character substitutions, broken punctuation, duplicated spaces, and split words.
+- Treat cleanup as conservative transcription. The output text should still be what the source says.
+- Correct only visually proven character substitutions, broken punctuation, duplicated spaces, and split words.
 - Preserve domain-specific notation, units, English abbreviations, and printed numerical values unless the source is clearly a typographical error and the user authorized correction.
+- Never expand, summarize, standardize, or paraphrase source wording during OCR cleanup. Keep `COPD` as `COPD`, not `慢性阻塞性肺疾病`; keep `患者发热温度升至39°`, not `患者体温39°`.
+- Keep a correction note or uncertainty marker when a cleanup decision is not directly supported by the page image.
 - Keep formulas as text when reliable. Otherwise insert a non-text or uncertainty marker at the source position.
 
 ## Handwriting and Non-Text
@@ -47,11 +50,11 @@ Treat printed text and handwriting as separate evidence channels.
 - Do not use a handwritten answer, crossing-out mark, stamp, figure, photograph, or diagram as printed content by default.
 - Insert `【非文本内容已跳过】` where meaningful non-text content was omitted.
 - Insert `【识别存疑：原识别文本】` when text cannot be resolved reliably.
-- Report the source filename and original PDF page for every marker in the final response.
+- Report the source filename and original PDF page or image identifier for every marker in the final response.
 
-## Page-Level Acceptance
+## Page/Image-Level Acceptance
 
-Require every source page to have at least one of:
+Require every source page or source image to have at least one of:
 
 - extracted text;
 - OCR text;

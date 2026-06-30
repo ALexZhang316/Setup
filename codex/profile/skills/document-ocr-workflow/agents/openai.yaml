@@ -1,0 +1,7 @@
+interface:
+  display_name: "Document OCR Workflow"
+  short_description: "Faithful OCR for documents and images"
+  default_prompt: "Use $document-ocr-workflow to faithfully extract source wording from documents or images, apply requested formatting or merging, and verify the result."
+
+policy:
+  allow_implicit_invocation: true

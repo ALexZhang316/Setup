@@ -5,7 +5,8 @@
 Parse documents into explicit records with fields such as:
 
 - stable identifier or generated sequence;
-- normalized text;
+- source text or transcribed text for final output;
+- normalized key for matching only;
 - options or child paragraphs;
 - answer or paired content;
 - source file and page;
@@ -14,11 +15,13 @@ Parse documents into explicit records with fields such as:
 
 Do not use paragraph count or a numbered-line regular expression as the authoritative record count. Numberless records, wrapped lines, and shared material invalidate that shortcut.
 
+Keep normalization separate from transcription. Normalized keys may remove spacing noise, unify punctuation, or simplify comparison, but they must not replace final wording. Do not use normalized keys to expand abbreviations, translate terminology, summarize phrases, or alter measured values.
+
 ## Pair Two Documents
 
 1. Parse each source independently.
 2. Compare explicit identifiers when present.
-3. Compare normalized stems or stable leading text.
+3. Compare normalized keys from stems or stable leading text.
 4. Preserve original order as a fallback signal, not as sole proof.
 5. Produce an unresolved list for duplicates, omissions, and numberless records.
 6. Proceed to merge only when every record is paired or explicitly waived.
@@ -53,6 +56,7 @@ Represent the marker, shared material, and every dependent record from `x` throu
 ## Acceptance Checks
 
 - every source record appears exactly once;
+- final output preserves source wording unless the user explicitly requested rewriting;
 - every paired answer remains attached to the correct record;
 - numberless records are represented;
 - every shared range is complete and contiguous;

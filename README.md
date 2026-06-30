@@ -23,7 +23,6 @@ scripts/
   backup-all.ps1              Export Codex, then Claude Code
 shared/
   Sync-Core.psm1              Shared sync helpers
-  elevated-runner/            Shared elevated command runner
   hotkey/install.ps1          Chat hotkey installer
 ```
 
@@ -38,7 +37,6 @@ shared/
 | `claudecode\restore.cmd` | Restore only Claude Code |
 | `claudecode\backup.cmd` | Export only Claude Code |
 | `hotkey.cmd` | Install Enter newline / Ctrl+Enter send remap |
-| `elevated-runner.cmd` | Install the shared elevated command runner |
 
 All sync PowerShell scripts support `-Preview`:
 
@@ -85,26 +83,6 @@ Restore on another machine:
 ```powershell
 git pull
 .\restore-all.cmd
-```
-
-## Elevated Runner
-
-Install:
-
-```powershell
-.\elevated-runner.cmd
-```
-
-Submit an elevated command from a normal agent shell:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\shared\elevated-runner\new-job.ps1 -Command "net session" -Wait
-```
-
-Logs are written under:
-
-```text
-%LOCALAPPDATA%\SetupElevatedRunner\logs
 ```
 
 ## Hotkey
